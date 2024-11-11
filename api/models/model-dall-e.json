@@ -1,0 +1,7 @@
+{
+	"model": "dall-e-3",
+	"prompt": "aaa",
+	"n": 0,
+	"size": "wxh",
+	"response_format": "b64_json"
+}

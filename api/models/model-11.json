@@ -1,0 +1,8 @@
+{
+    "text": "aaa",
+    "model_id": "eleven_monolingual_v1",
+    "voice_settings": {
+        "stability": 0,
+        "similarity_boost": 0
+    }
+}

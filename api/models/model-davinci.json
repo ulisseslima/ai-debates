@@ -1,0 +1,9 @@
+{
+	"model": "text-davinci-003",
+	"prompt": "aaa",
+	"max_tokens": 1024,
+	"temperature": 0.8,
+	"n": 1,
+	"stream": false,
+	"logprobs": null
+}

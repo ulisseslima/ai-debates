@@ -1,0 +1,7 @@
+{
+	"model": "text-curie-001",
+	"prompt": "aaa",
+	"max_tokens": 1024,
+	"temperature": 0.1,
+	"n": 1
+}

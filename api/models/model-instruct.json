@@ -1,0 +1,8 @@
+{
+	"model": "gpt-3.5-turbo-instruct",
+	"prompt": "aaa",
+	"max_tokens": 1024,
+	"temperature": 0.8,
+	"stream": false,
+	"logprobs": null
+}
