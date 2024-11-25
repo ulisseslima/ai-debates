@@ -130,13 +130,20 @@ function safe_name() {
 ##
 # removes special markdown characters for tts
 function safe_md() {
-    echo "${1}" | sed 's/[*#`-]//g' | replace.sh '\/' ' out of '
+    echo "${1}" | sed 's/[*#`]//g' | replace.sh '\/' ' out of '
 }
 
 function lpad() {
-    n=$1
-    pads=${2:-2}
-    printf "%0${pads}d\n" $n
+    value=$1
+    length=${2:-2}
+    printf "%0${length}d\n" $value
+}
+
+function rpad() {
+    string="$1"
+    length=${2}
+
+    printf "%-${length}s ...\n" "${string}"
 }
 
 ##
