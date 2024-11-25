@@ -25,6 +25,7 @@ shift
 
 start=1
 end=1
+speed=1.25
 
 while test $# -gt 0
 do
@@ -40,6 +41,10 @@ do
     --end|-e)
       shift
       end=$1
+    ;;
+    --speed)
+      shift
+      speed=$1
     ;;
     --tts-provider|--provider)
       shift
@@ -114,11 +119,11 @@ function tts() {
         >&2 echo "└ ${ttsf} - generating $tts_provider tts..."
         case $tts_provider in
             OpenAI)
-                ttsf=$($MYDIR/openai/tts-openai.sh $voice "$text" -o "${ttsf}" -x 1.25)
+                ttsf=$($MYDIR/openai/tts-openai.sh $voice "$text" -o "${ttsf}" -x $speed)
             ;;
             elevenlabs.io)
                 set +e
-                ttsf=$($MYDIR/elevenlabs.io/tts-11.sh "$voice" "$text" -o "${ttsf}" -x 1.25)
+                ttsf=$($MYDIR/elevenlabs.io/tts-11.sh "$voice" "$text" -o "${ttsf}" -x $speed)
                 return_code=$?
                 set -e
 
@@ -129,7 +134,7 @@ function tts() {
                 fi
             ;;
             *)
-                ttsf=$($ROOT/api/api-gcloud-tts.sh "$text" -o "$ttsf" -x 1.25 $voice)
+                ttsf=$($ROOT/api/api-gcloud-tts.sh "$text" -o "$ttsf" -x $speed $voice)
                 if [[ "$ttsf" == *'check sentence lengths'* ]]; then
                     last_response=$($ROOT/last-response.sh completions)
                     err "manual check required on: $last_response"
