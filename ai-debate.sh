@@ -43,15 +43,16 @@ function speech() {
   txt="$1"
   voice="$2"
   out="$3"
+  speed=${4:-1.25}
 
   padded_order=$(lpad $order)
-  outf="$projectd/$padded_order-dabate-${out}.ogg"
+  outf="$projectd/$padded_order-debate-${out}.ogg"
 
   if [[ ! -f "$outf" ]]; then
     info "generating tts: $txt"
-    $MYDIR/tts/tts.sh "$txt" --tts-provider $tts_provider --voice "$voice" -o "$outf"
+    $MYDIR/tts/tts.sh "$txt" --tts-provider $tts_provider --voice "$voice" --speed $speed -o "$outf"
     
-    echo "## $padded_order - ${out^^}" | tee -a $script
+    echo "# $padded_order - ${out^^}" | tee -a $script
     echo "$txt" >> "$script"
   else
     info "already created: $outf"
@@ -59,41 +60,10 @@ function speech() {
   order=$((order+1))
 }
 
-##
-# groups files intro a single one
-function group() {
-  pattern="$1"
-  order=$(lpad "$2")
-
-  outn="$order-${pattern}_cut"
-  outf="$projectd/${outn}.mp4"
-  out="$projectd/${outn}-w_soundtrack.mp4"
-
-  if [[ ! -f "$outf" ]]; then
-    info "grouping: $pattern..."
-    mkdir $projectd/$pattern && mv $projectd/*${pattern}*.mp4 $projectd/$pattern
-
-    find "$projectd/$pattern" -maxdepth 1 -type f -name "*$pattern*.mp4" -printf "file '%p'\n" | sort | ffmpeg-concat.sh -o "$outf"
-    require -f outf
-  fi
-
-  if [[ ! -f "$out" ]]; then
-    faceless-soundtrack "$outf" -o "$out" --volume 0.2 --lib "$SONG_LIBRARY"
-    readlink -f $out
-    require -f out
-    info "soundtrack ok: $out"
-    if [[ -f "$outf" ]]; then
-      mv "$outf" $projectd/$pattern
-    fi
-  fi
-
-  echo "grouped $pattern: $out"
-}
-
 start=$(elapsed.sh)
 tts_provider=google
 order=1
-suspend=true
+suspend=false
 
 # generate a hot topic
 # topic="should all drugs be legalized?"
@@ -101,12 +71,20 @@ topic="$1"
 require topic
 shift
 
+topic_name=$(safe_name "$topic")
+# TODO 
+# * check if topic was already started and replace or resume
+# * include youtube chapters: faceless-chapters
+
 while test $# -gt 0
 do
     case "$1" in
     --suspend)
-        suspend=true
-        info "will suspend machine when finished"
+      suspend=true
+      info "will suspend machine when finished"
+    ;;
+    --reset)
+      $MYDIR/api/ai-chat.sh --context $topic_name --delete true
     ;;
     -*)
       err "bad option '$1'"
@@ -116,17 +94,12 @@ do
     shift
 done
 
-topic_name=$(safe_name "$topic")
-# TODO check if topic was already started and replace or resume
-
 projectd="$PROJECTS/$topic_name"
 mkdir -p $projectd
 script="$projectd/debate.md"
 
 response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
 echo "$response"
-info "<enter> to continue..."
-read confirmation
 
 prompt="Extract the name, denomination, and sex of the personas into the following format for each line: 
 persona name#persona denomination#sex
@@ -157,6 +130,7 @@ done
 
 info "generating voices..."
 # TODO don't repeat voices, pitch shift 1.15
+# TODO google doesn't allow rate with some languages. shift to ffmpeg
 tts_voice_positive=$(voice positive ",${persona1_sex}")
 tts_voice_negative=$(voice negative ",${persona2_sex}")
 tts_voice_mediator=$(voice mediator)
@@ -168,133 +142,124 @@ positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_pos
 negative: '$persona2' ($persona2_class) $persona2_sex - voiced by $tts_voice_negative
 " | tee -a "$script"
 
-# introduction
-speech="Today, we'll debate '$topic' with $persona1, a $persona1_class; and $persona2, a $persona2_class. They're two AI-generated personas. Please introduce yourselves."
+echo "$persona1 ($persona1_class)" > $projectd/positive.persona
+echo "$persona2 ($persona2_class)" > $projectd/negative.persona
+
+##
+# Introduction
+# TODO ver o que fazer pra não chamar o ai-chat se já tiver o arquivo. hoje depende de estar no cache pra não repetir a chamada e bugar tudo
+speech="Today, we'll debate '$topic' with $persona1, a $persona1_class; and $persona2, a $persona2_class. They're two Artificial Intelligence personas. Please introduce yourselves."
 speech "$speech" "$tts_voice_mediator" introduction
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "$response" --prompt "$persona1, you have 1 minute to introduce yourself and your worldviews")
-speech "$speech" "$tts_voice_positive" introduction-positive
+speech "$speech" "$tts_voice_positive" positive-introduction 1.4
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to introduce yourself and your worldviews")
-speech "$speech" "$tts_voice_negative" introduction-negative
+speech "$speech" "$tts_voice_negative" negative-introduction 1.4
 
-# argument 1
+# Argument 1
 speech="Thank you, guys. $persona1 and $persona2. Will now present their 3 rounds of arguments."
 speech "$speech" "$tts_voice_mediator" arguments
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a positive argument about the debate topic")
-speech "$speech" "$tts_voice_positive" argument1-positive
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a positive argument about the debate topic, taking ${persona2}'s background into consideration")
+speech "$speech" "$tts_voice_positive" positive_1-argument
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a negative argument about the debate topic")
-speech "$speech" "$tts_voice_negative" argument1-negative
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a negative argument about the debate topic, taking ${persona1}'s background into consideration")
+speech "$speech" "$tts_voice_negative" negative_1-argument
 
-# argument 2
+# Argument 2
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona2}'s arguments into consideration")
-speech "$speech" "$tts_voice_positive" argument2-positive
+speech "$speech" "$tts_voice_positive" positive_2-argument
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona1}'s arguments into consideration")
-speech "$speech" "$tts_voice_negative" argument2-negative
+speech "$speech" "$tts_voice_negative" negative_2-argument
 
-# rejoinders
+##
+# Rejoinders
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to refute ${persona2}'s arguments. Be polite, but persuasive. Use quick humor jabs to spice the debate with some provocation. At the end, sum up key points.")
-speech "$speech" "$tts_voice_positive" argument3-positive
+speech "$speech" "$tts_voice_positive" rejoinder_1-positive
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to refute ${persona1}'s arguments. Be polite, but persuasive. Use quick humor jabs to spice the debate with some provocation. At the end, sum up key points.")
-speech "$speech" "$tts_voice_negative" argument3-negative
+speech "$speech" "$tts_voice_negative" rejoinder_2-negative
 
-# question 1
-speech="Someone from the audience will now make a question to $persona1 and $persona2."
-speech "$speech" "$tts_voice_mediator" audience
+##
+# Audience Questions
+speech="Thank you for your speeches. Someone from the audience will now make a question to $persona1 and $persona2."
+speech "$speech" "$tts_voice_mediator" 'questions'
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "you're a person from the audience watching the debate" --prompt "Introduce yourself briefly and ask a question about a point that wasn't touched before in ${persona1}'s arguments")
-speech "$speech" "$tts_voice_audience" audience-positive-question
+speech "$speech" "$tts_voice_audience" qa_positive-audience-question
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, reply to the question")
-speech "$speech" "$tts_voice_positive" audience-positive-answer
+speech "$speech" "$tts_voice_positive" qap_answer-audience-positive
 
+##
 # question 2
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "Ask a question about a point that wasn't touched before in ${persona2}'s arguments.")
-speech "$speech" "$tts_voice_audience" audience-negative-question
+speech "$speech" "$tts_voice_audience" qa_negative-audience-question
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, reply to the question.")
-speech "$speech" "$tts_voice_negative" audience-negative-answer
+speech "$speech" "$tts_voice_negative" qan_answer-audience-negative
 
 speech="The debaters now have a minute to talk about something they regret not bringing up to the discussion."
 speech "$speech" "$tts_voice_mediator" closing-regrets
 
-# closing considerations
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, talk about something you regret not bringing up to the discussion")
-speech "$speech" "$tts_voice_positive" closing-positive
+##
+# Closing Considerations
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, in a relaxed manner, joke about something you regret not bringing up to the discussion, and a terrible argument brought up by $persona2")
+speech "$speech" "$tts_voice_positive" r_positive-closing
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, talk about something you regret not bringing up to the discussion")
-speech "$speech" "$tts_voice_negative" closing-negative
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, in a relaxed manner, joke about something you regret not bringing up to the discussion, and a terrible argument brought up by $persona1")
+speech "$speech" "$tts_voice_negative" r_negative-closing
 
-# score
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "you're the debate's judge" --prompt "Generate 3 scores for $persona1 and 3 scores for $persona2, based on formal debate metrics. Explain your scoring logic and parameters.")
-speech "$(safe_md "$speech")" "$tts_voice_judge" closing-judge
+##
+# Judges
+speech="Thank you, folks. Let's go over to our judges."
+speech "$speech" "$tts_voice_mediator" scoring
 
-# 7
+prompt="Generate 3 scores for $persona1 and 3 scores for $persona2, based on formal debate metrics. Explain your scoring logic and parameters.
+Use the following format for the output:
+# ${persona1}’s Scores:
+1. <score 1 summary>
+<details>
+2. <score 2 summary>
+<details>
+3. <score 3 summary>
+<details>
+
+# ${persona2}’s Scores:
+1. <score 1 summary>
+<details>
+2. <score 2 summary>
+<details>
+3. <score 3 summary>
+<details>"
+
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "you're the debate's judge" --prompt "$prompt")
+speech "$(safe_md "$speech")" "$tts_voice_judge" judge-scoring 1.5
+
+echo "${persona1}’s Scores:" > "$projectd/persona1-scores.md"
+echo "$speech" | sed -n "/$persona1’s Scores/,/$persona2’s Scores/p" | sed '$d' | grep -P "^[\d]" >> "$projectd/persona1-scores.md"
+
+echo "${persona2}’s Scores:" > "$projectd/persona2-scores.md"
+echo "$speech" | sed -n "/$persona2’s Scores/,\$p" | sed '$d' | grep -P "^[\d]" >> "$projectd/persona2-scores.md"
+
+##
 # ask the viwers to suggest a debate topic
 speech="What are your opinions about the debate? What would you like to see AI's debate next? Keep questioning!"
-speech "$speech" "$tts_voice_mediator" closing
+speech "$speech" "$tts_voice_mediator" end
+
+$MYDIR/api/ai-chat.sh --context $topic_name --delete true
 
 total_time=$(elapsed.sh $start --minutes)
 info "debate+tts time: $total_time minutes"
 
-##
-# render speeches
-# TODO:
-# * include a countdown timer
-# * include all the parts of the debate, with the current one highlighted
-# * include the name of the persona speaking
-info "creating speech videos..."
-while read audio
-do
-  n=$(echo "$audio" | cut -d'-' -f1)
-  fname=$(basename "$audio")
-  out="$projectd/$(echo "$fname" | rev | cut -d'-' -f3- | rev).mp4"
-  if [[ -f "${out}" ]]; then
-    info "already rendered: ${out}"
-    continue
-  fi
-
-  case "$fname" in
-    *question*)
-      bg=1d1f1c
-      fg=4f5d48
-    ;;
-    *positive*)
-      bg=007bce
-      fg=dfdfdf
-    ;;
-    *negative*)
-      bg=533d38
-      fg=dfdfdf
-    ;;
-    *)
-      bg=252525
-      fg=4f5d48
-    ;;
-  esac
-
-  ffmpeg <&1- -y -v 16 -i $audio\
-   -f lavfi -i color=size=1920x1080:rate=30:color=$bg\
-   -filter_complex "[0:a]aformat=channel_layouts=mono,showwaves=size=1280x720:mode=cline:rate=30:colors=$fg[v];[1:v][v]overlay=format=auto:x=(W-w)/2:y=(H-h)/2,format=yuv420p[outv]"\
-   -map "[outv]" -map 0:a -c:v libx264 -c:a copy -shortest "${out}"
-done < <(ls -1tr $projectd/*with-pause.ogg)
+$MYDIR/render-audios.sh "$projectd"
 
 total_time=$(elapsed.sh $start --minutes)
 info "rendering time: $total_time minutes"
 
-group debate 0
-# group closing 99
-
-# concat
-# final_cut="$projectd/final_cut.mp4"
-# find $projectd -maxdepth 1 -type f -name "*-*.mp4" -printf "file '%p'\n" | sort | ffmpeg-concat.sh -o "$final_cut"
-
-# total_time=$(elapsed.sh $start --minutes)
-# info "final time: $total_time minutes"
+$MYDIR/group-videos.sh "$projectd" debate 0
 
 info "done: $final_cut"
 if [[ $suspend == true ]]; then
