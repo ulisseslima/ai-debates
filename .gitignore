@@ -3,3 +3,4 @@ bin
 backlog.md
 done.md
 todo.sh
+*.tmp
