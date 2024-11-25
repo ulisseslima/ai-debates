@@ -1,0 +1,39 @@
+.blacker-bg {  background-color: #1d1f1c;}
+.bg {  background-color: #252525;}
+.blue {  background-color: #10456f;}
+.light-blue {  background-color: #007bce;}
+.white {  background-color: #dfdfdf;}
+.green {  background-color: #4f5d48;}
+.red {  background-color: #533d38;}
+
+.positive {  background-color: #10456f;}
+.negative {  background-color: #5f342b;}
+
+* {
+  color: #4f5d48;
+}
+
+.selected {
+  color: #dfdfdf;
+}
+
+header {
+  background-color: #4f5d48;
+}
+
+.content {
+  background-color: #f4f4f4;
+}
+
+.left-column,
+.right-column {
+  background-color: #1d1f1c;
+}
+
+.middle-column {
+  background-color: #252525;
+}
+
+footer {
+  background-color: #10456f;
+}
