@@ -15,6 +15,15 @@ model=4o
 cache=$(get-arg.sh --context $@)
 cache="$CACHE/context_${cache}"
 
+delete=$(get-arg.sh --delete $@)
+if [[ "$delete" == true ]]; then
+    # info "remove cache $cache ?"
+    # read confirmation
+    rm -f "$cache"
+    info "cache $cache removed"
+    exit 0
+fi
+
 json=$($MYDIR/ai-model.sh $model "$@")
 response=$($MYDIR/api-open-ai.sh POST 'chat/completions' "$json" | jq -r .choices[0].message.content)
 # request=$($MYDIR/ai-model.sh $model "$@")
