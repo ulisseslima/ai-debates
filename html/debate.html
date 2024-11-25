@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flexbox Layout</title>
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/palette.css">
+    <style>
+        /* General Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-size: 25px;
+        }
+
+        html, body {
+            height: 100%;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* Header Style */
+        header {
+            text-transform: capitalize;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            flex: 0 0 auto;
+            /* Prevent shrinking or growing */
+        }
+
+        /* Content Row Style */
+        .content {
+            display: flex;
+            flex: 1 1 auto;
+            /* Dynamically expands to fill available space */
+        }
+
+        /* Columns */
+        .left-column,
+        .right-column {
+            flex: 0 0 250px;
+            /* Fixed width for side columns */
+            padding: 10px;
+        }
+
+        .right-column {
+            display: flex; /* Enables Flexbox layout */
+            justify-content: center; /* Horizontally centers text */
+            align-items: center; /* Vertically centers text */
+            text-align: center; /* Ensures multiline text is centered */
+            font-size: 90px;
+        }
+
+        .middle-column {
+            flex: 1 1 auto;
+            /* Fills all available width */
+            padding: 10px;
+        }
+
+        footer {
+            color: white;
+            text-align: center;
+            padding: 10px;
+            flex: 0 0 auto;
+            text-transform: capitalize;
+            /* Prevent shrinking or growing */
+        }
+
+        .timer {
+            font-size: 50px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>has globalization been more beneficial or detrimental to the world economy and culture</header>
+        <div class="content">
+            <div class="left-column">
+                <ul>
+                <li>| Introduction     ...</li>
+                <li class="selected">| Positive         ...</li>
+                <li>| Negative         ...</li>
+                <li>| Arguments        ...</li>
+                <li>| Positive 1       ...</li>
+                <li>| Negative 1       ...</li>
+                <li>| Positive 2       ...</li>
+                <li>| Negative 2       ...</li>
+                <li>| Rejoinder 1      ...</li>
+                <li>| Rejoinder 2      ...</li>
+                <li>| Questions        ...</li>
+                <li>| Qa positive      ...</li>
+                <li>| Qap answer       ...</li>
+                <li>| Qa negative      ...</li>
+                <li>| Qan answer       ...</li>
+                <li>| Closing          ...</li>
+                <li>| R positive       ...</li>
+                <li>| R negative       ...</li>
+                <li>| Scoring          ...</li>
+                <li>| Judge            ...</li>
+                <li>| End              ...</li>
+                </ul>
+            </div>
+            <div class="middle-column">
+                <span class="timer selected">00:12</span>
+            </div>
+            <div class="right-column">
+                <!--(°□°) (╯°□°)╯︵ ┻━┻ ︵ ╯(°□° ╯) 	༼ ༎ຶ ෴ ༎ຶ༽ 	( •_•)O*¯`·.¸.·´¯`°Q(•_• ) -->
+                <!-- (ง'̀-'́)ง (ง'̀•'́)ง -->
+                <!-- (°◡°) (°□°) -->
+                (ง'̀-'́)ง
+            </div>
+        </div>
+        <footer>Alfred (Libertarian)</footer>
+    </div>
+</body>
+
+</html>
