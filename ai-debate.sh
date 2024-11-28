@@ -188,10 +188,10 @@ speech="Thank you for your speeches. Someone from the audience will now make a q
 speech "$speech" "$tts_voice_mediator" 'questions'
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "you're a person from the audience watching the debate" --prompt "Introduce yourself briefly and ask a question about a point that wasn't touched before in ${persona1}'s arguments")
-speech "$speech" "$tts_voice_audience" qa_positive-audience-question
+speech "$speech" "$tts_voice_audience" qa_positive-audience-question 1.4
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, reply to the question")
-speech "$speech" "$tts_voice_positive" qap_answer-audience-positive
+speech "$speech" "$tts_voice_positive" qap_answer-audience-positive 1.4
 
 ##
 # question 2
@@ -207,10 +207,10 @@ speech "$speech" "$tts_voice_mediator" closing-regrets
 ##
 # Closing Considerations
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, in a relaxed manner, joke about something you regret not bringing up to the discussion, and a terrible argument brought up by $persona2")
-speech "$speech" "$tts_voice_positive" r_positive-closing
+speech "$speech" "$tts_voice_positive" r_positive-closing 1.4
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, in a relaxed manner, joke about something you regret not bringing up to the discussion, and a terrible argument brought up by $persona1")
-speech "$speech" "$tts_voice_negative" r_negative-closing
+speech "$speech" "$tts_voice_negative" r_negative-closing 1.4
 
 ##
 # Judges
@@ -261,7 +261,7 @@ info "rendering time: $total_time minutes"
 
 $MYDIR/group-videos.sh "$projectd" debate 0
 
-info "done: $final_cut"
+info "done"
 if [[ $suspend == true ]]; then
     info "suspending..."
     systemctl suspend
