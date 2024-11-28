@@ -66,9 +66,13 @@ do
     shift
 done
 
+info "keeping alive"
+nohup keep-gnome-alive.sh rendering &
+
 chapters
 if [[ $chapters_only != true ]]; then
   render_audios "$projectd"
 fi
 
+keep-gnome-alive.sh rendering stop
 info "$ME - done"
