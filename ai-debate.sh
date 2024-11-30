@@ -63,7 +63,7 @@ function speech() {
 start=$(elapsed.sh)
 tts_provider=google
 order=1
-suspend=false
+suspend=true
 
 # generate a hot topic
 # topic="should all drugs be legalized?"
