@@ -101,12 +101,23 @@ fi
 
 info "- read by $voice"
 
+##
+# there are many types for this character: —
+# TODO: include other offending characters here 
+function sanitize_tts() {
+    txt="$1"
+    echo "$txt" | sed "s/—/. /g" | strip-emoji.sh
+}
+
 function tts() {
     text="$1"
     ttsf="$2"
 
     require text
     require ttsf
+
+    text=$(sanitize_json "$text")
+    text=$(sanitize_tts "$text")
     
     tries=0
     max_retries=5

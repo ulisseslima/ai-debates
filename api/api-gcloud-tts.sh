@@ -59,6 +59,42 @@ function is_audio() {
   file "$f" | grep -Pc '(MPEG ADTS, layer III|Ogg)' || true
 }
 
+function request_tts() {
+  sane_text="$1"
+
+  require sane_text
+  require lang_code
+  require voice
+  require audioEncoding
+  require speaking_rate
+
+  request="{
+  	 'input':{
+    	  'text':'$sane_text'
+  	 },
+  	 'voice':{
+    	  'languageCode':'${lang_code}',
+    	  'name':'${voice}'
+  	 },
+  	 'audioConfig':{
+        'speakingRate': ${speaking_rate},
+    	  'audioEncoding':'${audioEncoding}'
+  	 }
+	}"
+
+  if [[ "$manual_speaking_rate" == true ]]; then
+    request=$(echo "$request" | grep -v speakingRate)
+    info "removed speaking rate:"
+    >&2 echo "$request"
+  fi
+
+	curl -H "X-Goog-User-Project: $project_id" -H "Authorization: Bearer $token" -H "Content-Type: application/json; charset=utf-8"\
+   --data "$request" "$API_URL/text:synthesize"
+  
+  debug "ttsrequest=$request"
+  debug "response_jsonf=$jsonf"
+}
+
 while test $# -gt 0
 do
     case "$1" in
@@ -110,7 +146,7 @@ mkdir -p $cached
 require -d cached
 
 if [[ -z "$outf" ]]; then
-  outf=$cached/${prefix}-$gender-$voice.${!audioEncoding}
+  outf=$cached/${prefix}-$lang_code-$voice.${!audioEncoding}
 fi
 debug "project: $project_id"
 debug "token: $token"
@@ -120,46 +156,42 @@ debug "hash: $hash"
 if [[ $(is_audio "$outf") != 1 ]]; then
   debug "requesting tts..."
 
-  sane_text="$(echo "$text" | sed "s/'/\\\'/g")"
+  # note: requires sanitized text
+  sane_text="$text"
 
   # pitch: -20.0, 20.0
   # speakingRate: 0.25, 4.0
-  jsonf=$cached/$gender-$voice.json
-  request="{
-  	 'input':{
-    	  'text':'$sane_text'
-  	 },
-  	 'voice':{
-    	  'languageCode':'${lang_code}',
-    	  'name':'${voice}'
-  	 },
-  	 'audioConfig':{
-    	  'audioEncoding':'$audioEncoding',
-        'speakingRate': $speaking_rate
-  	 }
-	}"
-
-	curl -H "X-Goog-User-Project: $project_id" -H "Authorization: Bearer $token" -H "Content-Type: application/json; charset=utf-8"\
-   --data "$request" "$API_URL/text:synthesize" > $jsonf
-  
-  debug "ttsrequest=$request"
-  debug "response_jsonf=$jsonf"
+  jsonf=$cached/$lang_code-$voice.json
+  request_tts "$sane_text" > $jsonf
 
   if [[ "$(cat $jsonf)" == *'sentences that are too long'* ]]; then
     # ~281 characters before period limit: https://github.com/googleapis/google-cloud-node/issues/4074
     echo "check sentence lengths:"
     check-sentence-lengths.sh "$sane_text"
     exit 1
+  elif [[ "$(cat $jsonf)" == *'voice does not support speaking rate'* ]]; then
+    err "repeating request without speaking rate"
+    manual_speaking_rate=true
+    retry=true
+    request_tts "$sane_text" > $jsonf
   elif [[ "$(cat $jsonf)" == *error* ]]; then
     err "couldn't generate tts: $jsonf"
     exit 1
   fi
 
   cat $jsonf | jq -r .audioContent | base64 -d > "$outf"
+  
   if [[ $(is_audio "$outf") == 0 ]]; then
     err "$(cat $jsonf)"
     err "$(file "$outf")"
     rm "$outf"
+  else
+    if [[ "$manual_speaking_rate" == true ]]; then
+      info "$outf - setting $speaking_rate speaking_rate manually..."
+      mv "$outf" "${outf}.bk"
+      ffmpeg <&1- -v 16 -y -i "${outf}.bk" -filter:a "atempo=$speaking_rate" -c:a libopus -b:a 128K "$outf"
+      require -f outf
+    fi
   fi
 else
   info "returning from cache..."
