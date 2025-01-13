@@ -163,7 +163,7 @@ function render() {
     fi
   fi
   
-  footer=$(ffmpeg-box.sh "$person" --font Roboto --color "$chapters_fg" --font-border-color "$footer_bg" --medium --bottom-center --page-width 50 --box-color "$footer_bg" --box-opacity $box_opacity)
+  footer=$(ffmpeg-box.sh "$person" --font Roboto --color "$chapters_fg" --font-border-color "$footer_bg" --medium --bottom-center --page-width 150 --box-color "$footer_bg" --box-opacity $box_opacity)
 
   if [[ "$person" == Judge ]]; then
     duration=$(ffmpeg-info.sh "$audio" duration)
