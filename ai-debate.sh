@@ -53,7 +53,7 @@ function speech() {
     $MYDIR/tts/tts.sh "$txt" --tts-provider $tts_provider --voice "$voice" --speed $speed -o "$outf"
     
     echo "# $padded_order - ${out^^}" | tee -a $script
-    echo "$txt" >> "$script"
+    echo -e "${txt}\n" >> "$script"
   else
     info "already created: $outf"
   fi
@@ -63,7 +63,8 @@ function speech() {
 start=$(elapsed.sh)
 tts_provider=google
 order=1
-suspend=true
+suspend=false
+yes=true
 
 # generate a hot topic
 # topic="should all drugs be legalized?"
@@ -86,6 +87,12 @@ do
     --reset)
       $MYDIR/api/ai-chat.sh --context $topic_name --delete true
     ;;
+    -y)
+      yes=true
+    ;;
+    --confirm|-n)
+      yes=no
+    ;;
     -*)
       err "bad option '$1'"
       exit 1
@@ -99,7 +106,11 @@ mkdir -p $projectd
 script="$projectd/debate.md"
 
 response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
-echo "$response"
+echo -e "# ${topic^^}
+
+# PERSONAS
+$response
+\n" | tee -a "$script"
 
 prompt="Extract the name, denomination, and sex of the personas into the following format for each line: 
 persona name#persona denomination#sex
@@ -124,8 +135,13 @@ do
   persona2_sex=$(echo -e "$personas" | tail -1 | cut -d'#' -f3 | xargs)
 
   info "positive: '$persona1' ($persona1_class) $persona1_sex, negative: '$persona2' ($persona2_class) $persona2_sex"
-  info "<y> to continue..."
-  read personas
+  if [[ $yes != true ]]; then
+    info "<y> to continue..."
+    read personas
+  else
+    info "skipped confirmation"
+    personas=y
+  fi
 done
 
 info "generating voices..."
@@ -137,10 +153,10 @@ tts_voice_mediator=$(voice mediator)
 tts_voice_judge=$(voice judge)
 tts_voice_audience=$(voice audience)
 
-echo "# DEBATERS POSITIONS
+echo -e "# DEBATERS POSITIONS
 positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_positive
 negative: '$persona2' ($persona2_class) $persona2_sex - voiced by $tts_voice_negative
-" | tee -a "$script"
+\n" | tee -a "$script"
 
 echo "$persona1 ($persona1_class)" > $projectd/positive.persona
 echo "$persona2 ($persona2_class)" > $projectd/negative.persona
@@ -161,10 +177,10 @@ speech "$speech" "$tts_voice_negative" negative-introduction 1.4
 speech="Thank you, guys. $persona1 and $persona2. Will now present their 3 rounds of arguments."
 speech "$speech" "$tts_voice_mediator" arguments
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a positive argument about the debate topic, taking ${persona2}'s background into consideration")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a positive argument about the debate topic, taking ${persona2}'s background into consideration and referencing real-life, historical examples")
 speech "$speech" "$tts_voice_positive" positive_1-argument
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a negative argument about the debate topic, taking ${persona1}'s background into consideration")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a negative argument about the debate topic, taking ${persona1}'s background into consideration and referencing real-life, historical examples")
 speech "$speech" "$tts_voice_negative" negative_1-argument
 
 # Argument 2
@@ -260,6 +276,9 @@ total_time=$(elapsed.sh $start --minutes)
 info "rendering time: $total_time minutes"
 
 $MYDIR/group-videos.sh "$projectd" debate 0
+
+echo "" >> $script
+$MYDIR/video-chapters.sh "$projectd" >> $script
 
 info "done"
 if [[ $suspend == true ]]; then
