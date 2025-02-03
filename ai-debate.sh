@@ -21,17 +21,19 @@ source $(real require.sh)
 # generates a voice code to use in TTS requests
 function voice() {
   name="$1"
-  sex="$2"
+  sex="${2,,}"
 
-  cache="$projectd/tts_${name}.dat"
-  if [[ -f "$cache" ]]; then
-    tts_provider=$(cat $cache | cut -d'|' -f1)
-    tts_voice=$(cat $cache | cut -d'|' -f2)
-    info "restored $name voice: ${tts_provider}|$tts_voice"
+  ttscache="$projectd/tts_${name}.dat"
+  if [[ -f "$ttscache" ]]; then
+    tts_provider=$(cat $ttscache | cut -d'|' -f1)
+    tts_voice=$(cat $ttscache | cut -d'|' -f2)
+    tts_face=$(cat $ttscache | cut -d'|' -f3)
+    info "restored $name voice: ${tts_provider}|$tts_voice|$tts_face"
   else
     tts_voice=$($MYDIR/tts/tts.sh --voice-only --provider $tts_provider --voice-preference "${sex}")
-    echo "${tts_provider}|$tts_voice" > "$cache"
-    info "generated $name voice: ${tts_provider}|$tts_voice|$sex"
+    tts_face=$(find $FACE_LIBRARY -name "${sex:0:1}-*-p01.png" | random.sh)
+    echo "${tts_provider}|$tts_voice|$tts_face" > "$ttscache"
+    info "generated $name voice: ${tts_provider}|$tts_voice|$sex|$tts_face"
   fi
 
   echo $tts_voice
@@ -106,7 +108,8 @@ mkdir -p $projectd
 script="$projectd/debate.md"
 
 response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
-echo -e "# ${topic^^}
+echo -e "# TOPIC
+${topic}
 
 # PERSONAS
 $response
@@ -147,8 +150,8 @@ done
 info "generating voices..."
 # TODO don't repeat voices, pitch shift 1.15
 # TODO google doesn't allow rate with some languages. shift to ffmpeg
-tts_voice_positive=$(voice positive ",${persona1_sex}")
-tts_voice_negative=$(voice negative ",${persona2_sex}")
+tts_voice_positive=$(voice positive ",${persona1_sex,,}")
+tts_voice_negative=$(voice negative ",${persona2_sex,,}")
 tts_voice_mediator=$(voice mediator)
 tts_voice_judge=$(voice judge)
 tts_voice_audience=$(voice audience)
@@ -167,10 +170,10 @@ echo "$persona2 ($persona2_class)" > $projectd/negative.persona
 speech="Today, we'll debate '$topic' with $persona1, a $persona1_class; and $persona2, a $persona2_class. They're two Artificial Intelligence personas. Please introduce yourselves."
 speech "$speech" "$tts_voice_mediator" introduction
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "$response" --prompt "$persona1, you have 1 minute to introduce yourself and your worldviews")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "$response" --prompt "$persona1, you have 1 minute to introduce yourself and your worldviews in a funny manner")
 speech "$speech" "$tts_voice_positive" positive-introduction 1.4
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to introduce yourself and your worldviews")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to introduce yourself and your worldviews in a funny manner")
 speech "$speech" "$tts_voice_negative" negative-introduction 1.4
 
 # Argument 1
@@ -184,10 +187,10 @@ speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you ha
 speech "$speech" "$tts_voice_negative" negative_1-argument
 
 # Argument 2
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona2}'s arguments into consideration")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona2}'s arguments into consideration, but include snarky comments for entertainment")
 speech "$speech" "$tts_voice_positive" positive_2-argument
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona1}'s arguments into consideration")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona1}'s arguments into consideration, but include snarky comments for entertainment")
 speech "$speech" "$tts_voice_negative" negative_2-argument
 
 ##

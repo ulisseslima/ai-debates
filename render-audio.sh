@@ -1,6 +1,13 @@
 #!/bin/bash -e
 # @installable
 # render waveforms into video
+# to preview:
+# aidb-render-audio $ogg --preview
+# * https://huggingface.co/spaces/fffiloni/expression-editor
+# TODO descobrir como utilizar o valor de lavfi.astats.Overall.RMS_level em tempo real para usar nas animações:
+# * https://stackoverflow.com/questions/60088776/ffmpeg-how-to-pipe-rms-level-and-pts-time-metadata-without-generating-unwanted
+# * https://superuser.com/questions/1225239/how-do-i-constrain-a-value-to-audio-frequency-in-ffmpeg
+# * https://stackoverflow.com/questions/15792105/simulating-tv-noise
 MYSELF="$(readlink -f "$0")"
 MYDIR="${MYSELF%/*}"
 ME=$(basename $MYSELF)
@@ -20,6 +27,7 @@ audio="$1"
 require -f audio
 shift
 
+test=false
 preview=false
 projectd="$(dirname $audio)"
 topic=$(basename "$projectd")
@@ -32,11 +40,27 @@ rm -f ${stages_overlay}*
 mode=line
 
 ##
+# a square image of a chosen bg color
+function bg_square() {
+  color=$1
+
+  out="/tmp/bg${color}.png"
+  if [[ ! -f "$out" ]]; then
+    ffmpeg <&1- -y -v 16 -f lavfi -i color=c=${color}:s=200x200:d=1 -frames:v 1 "$out"
+  fi
+
+  echo "$out"
+}
+
+##
 # render audio waveforms
 function render() {
   info "creating waveform video: $audio ..."
   n=$(echo "$audio" | cut -d'-' -f1)
+  
   fname=$(basename "$audio" | rev | cut -d'.' -f2- | rev)
+  fixedname=$(echo "${fname/-with-pause/}" | cut -d'-' -f3)
+
   out="$projectd/${fname}.mp4"
   if [[ -f "${out}" && $preview == false ]]; then
     info "already rendered: ${out}"
@@ -46,7 +70,7 @@ function render() {
   fi
 
   tmp_wav_out="$projectd/tmp-wav-${fname}.mp4"
-  tmp_timer_out="$projectd/tmp-tmr-${fname}.mp4"
+  tmp_fx_out="$projectd/tmp-fx-${fname}.mp4"
 
   tmpd="$projectd/tmp"
   mkdir -p "$tmpd"
@@ -55,6 +79,11 @@ function render() {
   clock=false
   emoticon=false
   footer_bg='#4f5d48'
+  
+  face_resolution=300:300
+  facex=400
+  facey=339
+  
   case "$fname" in
     *question*)
       bg=1d1f1c
@@ -63,6 +92,10 @@ function render() {
       person=Audience
     ;;
     *positive*)
+      facex=400
+      facey=239
+      facedat=positive
+
       bg=252525
       fg=007bce
       mode=line
@@ -73,6 +106,11 @@ function render() {
       footer_bg='#10456f'
     ;;
     *negative*)
+      facex=1370
+      facey=539
+      facextra=",hflip"
+      facedat=negative
+
       bg=252525
       fg=533d38
       mode=cline
@@ -97,19 +135,45 @@ function render() {
     ;;
   esac
 
+  ttscache="$projectd/tts_${facedat}.dat"
+  if [[ -f "$ttscache" ]]; then
+    info "using face from tts: $ttscache"
+    tts_face1=$(cat $ttscache | cut -d'|' -f3)
+    tts_face2="${tts_face1/-p01/-p02}"
+
+    require -f tts_face1
+    require -f tts_face2
+  else
+    info "$ttscache - generating solid background: $bg"
+    tts_face1=$(bg_square $bg)
+    info "tts_face1: $tts_face1"
+    tts_face2=$(bg_square $bg)
+    info "tts_face2: $tts_face2"
+  fi
+
   waveform_offx=25
-  if [[ ! -f "$tmp_timer_out" ]]; then
+  if [[ ! -f "$tmp_fx_out" ]]; then
+    fxfilter="
+    [2:v]scale=${face_resolution}${facextra}[scaled1];
+    [3:v]scale=${face_resolution}${facextra}[scaled2];
+    [0:a]aformat=channel_layouts=mono,showwaves=size=1280x720:mode=$mode:rate=30:colors=$fg[wav];
+    [1:v][scaled1]overlay=x=${facex}:y=${facey}:enable='lt(mod(floor(t*2),2), 1)'[face1];
+    [face1][scaled2]overlay=x=${facex}:y=${facey}:enable='gt(mod(floor(t*2),2), 0)'[face2];
+    [face2][wav]overlay=format=auto:x=((W-w)/2)+${right_panel_offx}+${waveform_offx}:y=(H-h)/2,format=yuv420p[vfx];
+    "
+
     ffmpeg <&1- -y -v 16 -i $audio\
     -f lavfi -i color=size=1920x1080:rate=30:color=$bg\
-    -filter_complex "[0:a]aformat=channel_layouts=mono,showwaves=size=1280x720:mode=$mode:rate=30:colors=$fg[v];[1:v][v]overlay=format=auto:x=((W-w)/2)+${right_panel_offx}+${waveform_offx}:y=(H-h)/2,format=yuv420p[outv]"\
-    -map "[outv]" -map 0:a -c:v libx264 -c:a copy -shortest "${tmp_wav_out}"
+    -i $tts_face1 -i $tts_face2\
+    -filter_complex "$fxfilter"\
+    -map "[vfx]" -map 0:a -c:v libx264 -c:a copy -shortest "${tmp_wav_out}"
 
     if [[ "$clock" == true ]]; then
       ffmpeg-render-countdown.sh "$tmp_wav_out"\
        --offset-y -50 --offset-x +150 --font-size 64\
-       -o "$tmp_timer_out"
+       -o "$tmp_fx_out"
     else
-      cp "$tmp_wav_out" "$tmp_timer_out"
+      cp "$tmp_wav_out" "$tmp_fx_out"
     fi
   fi
   # else
@@ -146,7 +210,7 @@ function render() {
 
   header=$(ffmpeg-box.sh "$topic_txt" --font Roboto --color "$chapters_fg" --font-border-width 0 --font-border-color "$chapters_fg_unselected" --medium --top-center --page-width 150 --box-color "$chapters_fg_unselected" --box-opacity $box_opacity)
   
-  panel_args="--font "FreeSerif" --color '${chapters_fg_unselected}' --font-border-color '$footer_bg' --size 90 --box-size 250 --right ${right_panel_offx} --box-color '$chapters_bg' --box-opacity $box_opacity"
+  panel_args="--font "FreeSerif" --color '${chapters_fg_unselected}' --font-border-color '$footer_bg' --size 90 --box-size 250 --right ${right_panel_offx} --box-color '$chapters_bg' --box-opacity $box_opacity --text-bottom-right"
   right_panel=$(ffmpeg-box.sh " " $panel_args)
   if [[ $emoticon == false ]]; then
     right_panel_close=$(ffmpeg-box.sh "•. °" $panel_args --enable "lt(mod(t*2,2), 1)")
@@ -156,6 +220,7 @@ function render() {
       info "positive $positive"
       right_panel_close=$(ffmpeg-box.sh "(°◡°)" $panel_args --enable "lt(mod(t*2,2), 1)")
       right_panel_open=$(ffmpeg-box.sh "(°o°)" $panel_args --enable "gt(mod(t*2,2), 1)")
+      # (mod() is modulo)
     elif [[ "$positive" == false ]]; then
       info "positive $positive"
       right_panel_close=$(ffmpeg-box.sh "(ง'̀-'́)ง" $panel_args --enable "lt(mod(t*2,2), 1)")
@@ -175,18 +240,23 @@ function render() {
     score_overlay=",${score1},${score2}"
   fi
 
-  command="${chapters_text},${chapters_over},${footer},${header},${right_panel},${right_panel_close},${right_panel_open}${score_overlay}"
+  command="${chapters_text},${chapters_over},${footer},${header}${score_overlay}"
+  command="${command},${right_panel},${right_panel_close},${right_panel_open}"
 
   if [[ "$preview" == false ]]; then
-    ffmpeg-text.sh --command "$command" --in "${tmp_timer_out}" --out "$out"
+    ffmpeg-text.sh --command "$command" --in "${tmp_fx_out}" --out "$out"
     rm -f ${stages_overlay}*
 
     mv "${tmp_wav_out}" "$tmpd"
-    mv "${tmp_timer_out}" "$tmpd"
+    mv "${tmp_fx_out}" "$tmpd"
     echo "$out"
   else
-    info "previewing source: $tmp_timer_out"
-    ffmpeg-text.sh --command "$command" --preview "$tmp_timer_out"
+    info "previewing source: $tmp_fx_out"
+    ffmpeg-text.sh --command "$command" --preview "$tmp_fx_out"
+  fi
+
+  if [[ $test == true ]]; then
+    info "$tmp_fx_out"
   fi
 }
 
@@ -211,6 +281,9 @@ do
     --clear)
       rm -f "$stages_overlay"*
     ;;
+    --test)
+      test=true
+    ;;
     -*)
       err "bad option '$1'"
       exit 1
@@ -220,7 +293,11 @@ do
 done
 
 if [[ -z "$chapters" ]]; then
-  chapters=$($MYDIR/render-audios.sh "$(dirname $audio)" --chapters-only)
+  if [[ ! -f "$projectd/raw-chapters.md" ]]; then
+    chapters=$($MYDIR/render-audios.sh "$(dirname $audio)" --chapters-only)
+  else
+    chapters=$(cat "$projectd/raw-chapters.md")
+  fi
 fi
 
 render "$audio"

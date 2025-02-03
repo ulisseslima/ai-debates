@@ -50,6 +50,8 @@ function chapters() {
       chapters=$(echo -e "${chapters}\n${stage}")
     fi
   done < <(ls -1tr $projectd/*with-pause.ogg)
+
+  echo "$chapters" > "$projectd/raw-chapters.md"
 }
 
 while test $# -gt 0
