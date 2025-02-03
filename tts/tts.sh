@@ -26,6 +26,7 @@ shift
 start=1
 end=1
 speed=1.25
+pitch=1
 
 while test $# -gt 0
 do
@@ -45,6 +46,10 @@ do
     --speed)
       shift
       speed=$1
+    ;;
+    --pitch)
+        shift
+        pitch=$1
     ;;
     --tts-provider|--provider)
       shift
@@ -76,6 +81,8 @@ if [[ -z "$voice" ]]; then
             else
                 voice=$($MYDIR/google/tts-voice-select.sh --random "$voice_preference")
             fi
+
+            pitch=$(random-float.sh 0.8 1.10)
         ;;
         OpenAI|openai)
             voice=$($MYDIR/tts-openai.sh random none)
@@ -106,7 +113,7 @@ info "- read by $voice"
 # TODO: include other offending characters here 
 function sanitize_tts() {
     txt="$1"
-    echo "$txt" | sed "s/—/. /g" | strip-emoji.sh
+    echo "$txt" | sed "s/—/. /g" | tr '\n' | strip-emoji.sh
 }
 
 function tts() {
@@ -158,6 +165,13 @@ function tts() {
     done
 
     require -f ttsf
+
+    if [[ $pitch != 1 ]]; then
+        info "$ME: $ttsf - changing pitch: $pitch"
+        pitched=$(ffmpeg-pitch.sh "$ttsf" $pitch)
+        require -f pitched
+        mv "$pitched" "$ttsf"
+    fi
     
     if [[ $start == 0 && $end == 0 ]]; then
         echo "$ttsf"
