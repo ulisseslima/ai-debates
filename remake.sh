@@ -1,6 +1,6 @@
 #!/bin/bash -e
 # @installable
-# regenerates the video
+# regenerates the video by processing the individual audio files again
 MYSELF="$(readlink -f "$0")"
 MYDIR="${MYSELF%/*}"
 ME=$(basename $MYSELF)
@@ -18,6 +18,26 @@ source $(real require.sh)
 
 projectd="$1"
 require -d projectd
+shift
+
+while test $# -gt 0
+do
+    case "$1" in
+    --suspend)
+      suspend=true
+      info "will suspend machine when finished"
+    ;;
+    --tts-regen)
+      ttsregen=true
+      info "will regenerate tts"
+    ;;
+    -*)
+      err "bad option '$1'"
+      exit 1
+    ;;
+    esac
+    shift
+done
 
 function check_voice() {
   pfacef=$projectd/tts_${1}.dat
@@ -34,10 +54,95 @@ function check_voice() {
     echo "- tts_psex=$tts_psex"
 
     tts_pface=$(find $FACE_LIBRARY -name "${tts_psex:0:1}-*-p01.png" | random.sh)
+    require tts_pface
     echo "- tts_pface=$tts_pface"
 
     echo "${tts_provider}|$tts_pvoice|$tts_pface" > "$pfacef"
   fi
+}
+
+##
+# generates a tts file
+function speech() {
+    txt="$1"
+    outf="$2"
+
+    outfname=$(basename "$outf")
+    padded_order=$(echo "$outfname" | cut -d'-' -f1)
+
+    case "$(basename $outf)" in
+        *question*)
+            speed=1.4
+            voicef="$projectd/tts_audience.dat"
+        ;;
+        *positive*)
+            speed=1.1
+            voicef="$projectd/tts_positive.dat"
+        ;;
+        *negative*)
+            speed=1.1
+            voicef="$projectd/tts_negative.dat"
+        ;;
+        *judge*)
+            speed=1.5
+            voicef="$projectd/tts_judge.dat"
+        ;;
+        *)
+            speed=1.2
+            voicef="$projectd/tts_mediator.dat"
+        ;;
+    esac
+
+    provider=$(cat $voicef | cut -d'|' -f1)
+    tts_voice=$(cat $voicef | cut -d'|' -f2)
+
+    if [[ ! -f "$outf" ]]; then
+        info "$outf: generating '$provider' tts [$tts_voice]@$speed: $txt"
+        $MYDIR/tts/tts.sh "$txt" --tts-provider "$provider" --voice "$tts_voice" --speed $speed -o "$outf"
+    else
+        info "$outf: already created"
+    fi
+}
+
+function oggcount() {
+    # count the number of .ogg files in $projectd
+    ls -1 $projectd/*.ogg 2>/dev/null | wc -l
+}
+
+function check_audio() {
+    # check the number of .ogg files in $projectd
+    oggfiles=$(oggcount)
+    if [[ "$ttsregen" == true || $oggfiles -eq 0 ]]; then
+        info "no .ogg files found in $projectd. re-generating..."
+        # iterate over each section in debate.md
+        while read section
+        do
+            # get the section title
+            title=$(echo $section | cut -d' ' -f2-)
+            # get the section number
+            number=$(echo $title | cut -d' ' -f1)
+            name=$(echo $title | cut -d' ' -f3)
+
+            if [[ $(nan.sh $number) == true ]]; then
+                info "skipping $section: '$number' is not a number"
+                continue
+            else
+                info "processing $section"
+            fi
+
+            # get all text before next section
+            text=$(cat $projectd/debate.md | sed -n "/$section/,/#/p" | sed '$d' | grep -v "$section")
+            info "generating tts for $section"
+
+            ttsf="$projectd/$number-debate-${name,,}.ogg"
+            speech "$text" "$ttsf"
+        done < <(cat $projectd/debate.md | grep -P '^#')
+        
+        oggfiles=$(oggcount)
+        info "audio regeneration complete: $oggfiles .ogg files created"
+    else
+        info "found $oggfiles .ogg files in $projectd. skipping tts regen..."
+    fi
 }
 
 speech=$projectd/debate.md
@@ -86,4 +191,10 @@ if [[ -d "$projectd/tmp" ]]; then
   mv "$projectd/tmp" "$projectd/bktmp"
 fi
 
+check_audio
 $MYDIR/render-audios.sh $projectd && $MYDIR/group-videos.sh $projectd debate 0
+
+if [[ $suspend == true ]]; then
+    info "suspending..."
+    systemctl suspend
+fi
