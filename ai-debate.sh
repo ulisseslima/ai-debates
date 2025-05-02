@@ -22,37 +22,59 @@ source $(real require.sh)
 function voice() {
   name="$1"
   sex="${2,,}"
+  provider=${3:-$tts_provider}
 
   ttscache="$projectd/tts_${name}.dat"
   if [[ -f "$ttscache" ]]; then
-    tts_provider=$(cat $ttscache | cut -d'|' -f1)
+    provider=$(cat $ttscache | cut -d'|' -f1)
     tts_voice=$(cat $ttscache | cut -d'|' -f2)
     tts_face=$(cat $ttscache | cut -d'|' -f3)
-    info "restored $name voice: ${tts_provider}|$tts_voice|$tts_face"
+
+    voice_key="${provider}|$tts_voice|$tts_face"
+    info "restored $name voice: ${voice_key}"
   else
-    tts_voice=$($MYDIR/tts/tts.sh --voice-only --provider $tts_provider --voice-preference "${sex}")
-    tts_face=$(find $FACE_LIBRARY -name "${sex:0:1}-*-p01.png" | random.sh)
-    echo "${tts_provider}|$tts_voice|$tts_face" > "$ttscache"
-    info "generated $name voice: ${tts_provider}|$tts_voice|$sex|$tts_face"
+    if [[ -n "$sex" ]]; then
+        sex="${sex/nonbinary/female}"
+        sex="${sex/non-binary/female}"
+        sexf=${sex:0:1} # f/m
+        
+        tts_face=$(find $FACE_LIBRARY -name "${sexf}-*-p01.png" | random.sh)
+        require tts_face "${sexf}-*-p01.png in '$FACE_LIBRARY' ($name/$sex)"
+    fi
+    
+    tts_voice=$($MYDIR/tts/tts.sh --voice-only --provider $provider --voice-preference "${sex}")
+    require tts_voice
+
+    voice_key="${provider}|$tts_voice|$tts_face"
+    echo "${voice_key}" > "$ttscache"
+    info "generated $name voice: ${voice_key}"
   fi
 
-  echo $tts_voice
+  echo $voice_key
 }
 
 ##
 # generates a tts file
 function speech() {
   txt="$1"
-  voice="$2"
+  voice_key="$2"
   out="$3"
   speed=${4:-1.25}
+
+  provider=$(cat $voice_key | cut -d'|' -f1)
+  tts_voice=$(cat $voice_key | cut -d'|' -f2)
 
   padded_order=$(lpad $order)
   outf="$projectd/$padded_order-debate-${out}.ogg"
 
+  if [[ "$script_only" == true ]]; then
+    info "script only, not generating tts: $outf"
+    return 0
+  fi
+
   if [[ ! -f "$outf" ]]; then
-    info "generating tts: $txt"
-    $MYDIR/tts/tts.sh "$txt" --tts-provider $tts_provider --voice "$voice" --speed $speed -o "$outf"
+    info "generating '$provider' tts [$tts_voice]@$speed: $txt"
+    $MYDIR/tts/tts.sh "$txt" --tts-provider "$provider" --voice "$tts_voice" --speed $speed -o "$outf"
     
     echo "# $padded_order - ${out^^}" | tee -a $script
     echo -e "${txt}\n" >> "$script"
@@ -64,6 +86,7 @@ function speech() {
 
 start=$(elapsed.sh)
 tts_provider=google
+script_only=false
 order=1
 suspend=false
 yes=true
@@ -75,9 +98,8 @@ require topic
 shift
 
 topic_name=$(safe_name "$topic")
-# TODO 
+# TODO
 # * check if topic was already started and replace or resume
-# * include youtube chapters: faceless-chapters
 
 while test $# -gt 0
 do
@@ -95,6 +117,9 @@ do
     --confirm|-n)
       yes=no
     ;;
+    --script-only)
+      script_only=true
+    ;;
     -*)
       err "bad option '$1'"
       exit 1
@@ -108,12 +133,6 @@ mkdir -p $projectd
 script="$projectd/debate.md"
 
 response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
-echo -e "# TOPIC
-${topic}
-
-# PERSONAS
-$response
-\n" | tee -a "$script"
 
 prompt="Extract the name, denomination, and sex of the personas into the following format for each line: 
 persona name#persona denomination#sex
@@ -147,11 +166,18 @@ do
   fi
 done
 
+echo -e "# TOPIC
+${topic} $persona1, a $persona1_class vs. $persona2_class
+
+# PERSONAS
+$response
+\n" | tee -a "$script"
+
 info "generating voices..."
 # TODO don't repeat voices, pitch shift 1.15
 # TODO google doesn't allow rate with some languages. shift to ffmpeg
-tts_voice_positive=$(voice positive ",${persona1_sex,,}")
-tts_voice_negative=$(voice negative ",${persona2_sex,,}")
+tts_voice_positive=$(voice positive "${persona1_sex^^}" elevenlabs.io)
+tts_voice_negative=$(voice negative "${persona2_sex^^}" elevenlabs.io)
 tts_voice_mediator=$(voice mediator)
 tts_voice_judge=$(voice judge)
 tts_voice_audience=$(voice audience)
@@ -170,10 +196,10 @@ echo "$persona2 ($persona2_class)" > $projectd/negative.persona
 speech="Today, we'll debate '$topic' with $persona1, a $persona1_class; and $persona2, a $persona2_class. They're two Artificial Intelligence personas. Please introduce yourselves."
 speech "$speech" "$tts_voice_mediator" introduction
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "$response" --prompt "$persona1, you have 1 minute to introduce yourself and your worldviews in a funny manner")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "$response" --prompt "$persona1, you have 1 minute to introduce yourself and your worldviews in a funny manner. No script cues, just pure dialog.")
 speech "$speech" "$tts_voice_positive" positive-introduction 1.4
 
-speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to introduce yourself and your worldviews in a funny manner")
+speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to introduce yourself and your worldviews in a funny manner. No script cues, just pure dialog.")
 speech "$speech" "$tts_voice_negative" negative-introduction 1.4
 
 # Argument 1
@@ -181,25 +207,25 @@ speech="Thank you, guys. $persona1 and $persona2. Will now present their 3 round
 speech "$speech" "$tts_voice_mediator" arguments
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a positive argument about the debate topic, taking ${persona2}'s background into consideration and referencing real-life, historical examples")
-speech "$speech" "$tts_voice_positive" positive_1-argument
+speech "$speech" "$tts_voice_positive" positive_1-argument 1
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a negative argument about the debate topic, taking ${persona1}'s background into consideration and referencing real-life, historical examples")
-speech "$speech" "$tts_voice_negative" negative_1-argument
+speech "$speech" "$tts_voice_negative" negative_1-argument 1
 
 # Argument 2
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona2}'s arguments into consideration, but include snarky comments for entertainment")
-speech "$speech" "$tts_voice_positive" positive_2-argument
+speech "$speech" "$tts_voice_positive" positive_2-argument 1
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to present a second round of arguments about the debate topic, taking ${persona1}'s arguments into consideration, but include snarky comments for entertainment")
-speech "$speech" "$tts_voice_negative" negative_2-argument
+speech "$speech" "$tts_voice_negative" negative_2-argument 1
 
 ##
 # Rejoinders
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, you have 1 minute to refute ${persona2}'s arguments. Be polite, but persuasive. Use quick humor jabs to spice the debate with some provocation. At the end, sum up key points.")
-speech "$speech" "$tts_voice_positive" rejoinder_1-positive
+speech "$speech" "$tts_voice_positive" rejoinder_1-positive 1
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, you have 1 minute to refute ${persona1}'s arguments. Be polite, but persuasive. Use quick humor jabs to spice the debate with some provocation. At the end, sum up key points.")
-speech "$speech" "$tts_voice_negative" rejoinder_2-negative
+speech "$speech" "$tts_voice_negative" rejoinder_2-negative 1
 
 ##
 # Audience Questions
@@ -210,15 +236,15 @@ speech=$($MYDIR/api/ai-chat.sh --context $topic_name --system "you're a person f
 speech "$speech" "$tts_voice_audience" qa_positive-audience-question 1.4
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona1, reply to the question")
-speech "$speech" "$tts_voice_positive" qap_answer-audience-positive 1.4
+speech "$speech" "$tts_voice_positive" qap_answer-audience-positive 1.3
 
 ##
 # question 2
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "Ask a question about a point that wasn't touched before in ${persona2}'s arguments.")
-speech "$speech" "$tts_voice_audience" qa_negative-audience-question
+speech "$speech" "$tts_voice_audience" qa_negative-audience-question 1.4
 
 speech=$($MYDIR/api/ai-chat.sh --context $topic_name --prompt "$persona2, reply to the question.")
-speech "$speech" "$tts_voice_negative" qan_answer-audience-negative
+speech "$speech" "$tts_voice_negative" qan_answer-audience-negative 1.3
 
 speech="The debaters now have a minute to talk about something they regret not bringing up to the discussion."
 speech "$speech" "$tts_voice_mediator" closing-regrets

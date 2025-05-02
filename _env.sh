@@ -43,7 +43,7 @@ LOGS="$CACHE/logs"
 
 FFMPEG_TMP=$CACHE/ffmpeg
 
-TTS_ELEVEN=$MYDIR/tts/elevelabs.io
+TTS_ELEVEN=$MYDIR/elevenlabs.io
 FFMPEG=$MYDIR/ffmpeg
 
 # logging
@@ -191,7 +191,9 @@ function popf() {
 function rotate_tts11_api_key() {
     max_tries=$(grep -c ELEVEN_LABS_KEY $LOCAL_ENV)
     tries=1
-    min_chars_required=1000
+    # around 1k words or 6k chars for one of the debaters
+    # credits in 11labs are variable
+    min_chars_required=1200
 
     remaining=$($TTS_ELEVEN/tts-11-remaining-chars.sh)
     while [[ -z "$remaining" || $remaining -lt $min_chars_required ]]

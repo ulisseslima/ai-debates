@@ -37,8 +37,9 @@ do
     ;;
     --random)
       shift
-      filter="$1"
+      filter="${1^^}"
 
+      info "getting random '${filter}' ..."
       lang_voice=$(cat $MYDIR/voices.csv | random.sh "$filter" 2,3)
 
       lang_code=$(echo "$lang_voice" | cut -d',' -f1)

@@ -17,6 +17,7 @@ source $MYDIR/../_env.sh
 source $(real require.sh)
 debug "sourced"
 
+debug=false
 start=$(elapsed.sh)
 
 text="$1"
@@ -63,6 +64,9 @@ do
         shift
         voice_preference="$1"
     ;;
+    --debug)
+        debug=true
+    ;;
     -*)
       err "bad option '$1'"
       exit 1
@@ -79,16 +83,17 @@ if [[ -z "$voice" ]]; then
             if [[ -z "$voice_preference" ]]; then
                 voice=$($MYDIR/google/tts-voice-select.sh --random-american)
             else
-                voice=$($MYDIR/google/tts-voice-select.sh --random "$voice_preference")
+                voice=$($MYDIR/google/tts-voice-select.sh --random ",${voice_preference^^}")
             fi
 
             pitch=$(random-float.sh 0.8 1.10)
+            info "random pitch: $pitch"
         ;;
         OpenAI|openai)
-            voice=$($MYDIR/tts-openai.sh random none)
+            voice=$($MYDIR/openai/tts-openai.sh random none)
         ;;
         elevenlabs.io|eleven)
-            voice=$($MYDIR/tts-11.sh random none)
+            voice=$($MYDIR/elevenlabs.io/tts-11.sh random-${voice_preference,,} none)
         ;;
         *)
             err "unreognized tts provider: $tts_provider"
@@ -106,14 +111,13 @@ if [[ -z "$out" ]]; then
     out=/tmp/$(safe_name "$text")
 fi
 
-info "- read by $voice"
+info "- read by '$voice' from '$tts_provider'"
 
 ##
-# there are many types for this character: —
-# TODO: include other offending characters here 
+# * replaces line breaks with spaces
 function sanitize_tts() {
     txt="$1"
-    echo "$txt" | sed "s/—/. /g" | tr '\n' | strip-emoji.sh
+    echo "$txt" | sed 's/\\\\n/ /g' | sed "s/—/. /g" | strip-emoji.sh
 }
 
 function tts() {
@@ -124,7 +128,13 @@ function tts() {
     require ttsf
 
     text=$(sanitize_json "$text")
+    if [[ "$debug" == true ]]; then
+        info "sanitize_json: $text"
+    fi
     text=$(sanitize_tts "$text")
+    if [[ "$debug" == true ]]; then
+        info "sanitize_tts: $text"
+    fi
     
     tries=0
     max_retries=5
@@ -139,7 +149,20 @@ function tts() {
             OpenAI)
                 ttsf=$($MYDIR/openai/tts-openai.sh $voice "$text" -o "${ttsf}" -x $speed)
             ;;
-            elevenlabs.io)
+            elevenlabs.io|eleven)
+                voice_gender=$(echo "$voice" | cut -d'#' -f3)
+
+                set +e
+                error=$(rotate_tts11_api_key)
+                set -e
+
+                if [[ -n "$error" ]]; then
+                    tts_provider=google
+                    voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
+                    err "falling back to google tts with $voice ..."
+                    continue
+                fi
+
                 set +e
                 ttsf=$($MYDIR/elevenlabs.io/tts-11.sh "$voice" "$text" -o "${ttsf}" -x $speed)
                 return_code=$?
@@ -147,17 +170,21 @@ function tts() {
 
                 if [[ "$return_code" != 0 ]]; then
                     tts_provider=google
-                    voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider)
+                    voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
                     err "falling back to google tts with $voice ..."
                 fi
             ;;
-            *)
+            google)
                 ttsf=$($ROOT/api/api-gcloud-tts.sh "$text" -o "$ttsf" -x $speed $voice)
                 if [[ "$ttsf" == *'check sentence lengths'* ]]; then
                     last_response=$($ROOT/last-response.sh completions)
                     err "manual check required on: $last_response"
                     break
                 fi
+            ;;
+            *)
+                err "unrecognized tts_provider: $tts_provider"
+                break
             ;;
         esac
 
