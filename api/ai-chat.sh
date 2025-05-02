@@ -10,7 +10,7 @@ source $MYDIR/../_env.sh
 [[ -f $LOCAL_ENV ]] && source $LOCAL_ENV
 source $(real require.sh)
 
-model=4o
+model=4
 
 cache=$(get-arg.sh --context $@)
 cache="$CACHE/context_${cache}"
@@ -26,8 +26,6 @@ fi
 
 json=$($MYDIR/ai-model.sh $model "$@")
 response=$($MYDIR/api-open-ai.sh POST 'chat/completions' "$json" | jq -r .choices[0].message.content)
-# request=$($MYDIR/ai-model.sh $model "$@")
-# response="hi from gpt: $(now.sh -dt)"
 context="{ \"role\": \"assistant\", \"content\": \"$(sanitize_json "$response")\" }"
 
 if [[ -n "$cache" ]]; then
