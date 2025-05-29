@@ -99,7 +99,7 @@ function render() {
       bg=252525
       fg=007bce
       mode=line
-      person=$(cat "$projectd/positive.persona")
+      person="$(cat "$projectd/positive.persona" | cut -d'#' -f1) [$(cat "$projectd/positive.persona" | cut -d'#' -f2)]"
       clock=true
       emoticon=true
       positive=true
@@ -114,7 +114,7 @@ function render() {
       bg=252525
       fg=533d38
       mode=cline
-      person=$(cat "$projectd/negative.persona")
+      person="$(cat "$projectd/negative.persona" | cut -d'#' -f1) [$(cat "$projectd/negative.persona" | cut -d'#' -f2)]"
       clock=true
       emoticon=true
       positive=false

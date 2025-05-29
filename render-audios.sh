@@ -29,6 +29,7 @@ function render_audios() {
   info "creating waveform videos..."
   while read audio
   do
+    info "rendering $audio ..."
     $MYDIR/render-audio.sh "$audio" --chapters "$chapters"
   done < <(ls -1tr $projectd/*with-pause.ogg)
 }

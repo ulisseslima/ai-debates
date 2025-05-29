@@ -18,42 +18,6 @@ source $MYDIR/_env.sh
 source $(real require.sh)
 
 ##
-# generates a voice code to use in TTS requests
-function voice() {
-  name="$1"
-  sex="${2,,}"
-  provider=${3:-$tts_provider}
-
-  ttscache="$projectd/tts_${name}.dat"
-  if [[ -f "$ttscache" ]]; then
-    provider=$(cat $ttscache | cut -d'|' -f1)
-    tts_voice=$(cat $ttscache | cut -d'|' -f2)
-    tts_face=$(cat $ttscache | cut -d'|' -f3)
-
-    voice_key="${provider}|$tts_voice|$tts_face"
-    info "restored $name voice: ${voice_key}"
-  else
-    if [[ -n "$sex" ]]; then
-        sex="${sex/nonbinary/female}"
-        sex="${sex/non-binary/female}"
-        sexf=${sex:0:1} # f/m
-        
-        tts_face=$(find $FACE_LIBRARY -name "${sexf}-*-p01.png" | random.sh)
-        require tts_face "${sexf}-*-p01.png in '$FACE_LIBRARY' ($name/$sex)"
-    fi
-    
-    tts_voice=$($MYDIR/tts/tts.sh --voice-only --provider $provider --voice-preference "${sex}")
-    require tts_voice
-
-    voice_key="${provider}|$tts_voice|$tts_face"
-    echo "${voice_key}" > "$ttscache"
-    info "generated $name voice: ${voice_key}"
-  fi
-
-  echo $voice_key
-}
-
-##
 # generates a tts file
 function speech() {
   txt="$1"
@@ -61,8 +25,12 @@ function speech() {
   out="$3"
   speed=${4:-1.25}
 
-  provider=$(cat $voice_key | cut -d'|' -f1)
-  tts_voice=$(cat $voice_key | cut -d'|' -f2)
+  info "processing '$voice_key' ..."
+  provider=$(echo $voice_key | cut -d'|' -f1)
+  tts_voice=$(echo $voice_key | cut -d'|' -f2)
+
+  require provider
+  require tts_voice
 
   padded_order=$(lpad $order)
   outf="$projectd/$padded_order-debate-${out}.ogg"
@@ -167,7 +135,7 @@ do
 done
 
 echo -e "# TOPIC
-${topic} $persona1, a $persona1_class vs. $persona2_class
+${topic} - $persona1_class vs. $persona2_class
 
 # PERSONAS
 $response
@@ -187,8 +155,8 @@ positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_pos
 negative: '$persona2' ($persona2_class) $persona2_sex - voiced by $tts_voice_negative
 \n" | tee -a "$script"
 
-echo "$persona1 ($persona1_class)" > $projectd/positive.persona
-echo "$persona2 ($persona2_class)" > $projectd/negative.persona
+echo "$persona1#$persona1_class#${persona1_sex^^}" > $projectd/positive.persona
+echo "$persona2#$persona2_class#${persona2_sex^^}" > $projectd/negative.persona
 
 ##
 # Introduction

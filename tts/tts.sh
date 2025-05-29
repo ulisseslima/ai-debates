@@ -114,10 +114,16 @@ fi
 info "- read by '$voice' from '$tts_provider'"
 
 ##
-# * replaces line breaks with spaces
+# replaces: 
+# * line breaks with spaces
+# * em dashes with periods
+# * removes emojis
+# * removes asterisks
+# * replaces quotes with curly quotes
+# * replaces single quotes with curly single quotes
 function sanitize_tts() {
     txt="$1"
-    echo "$txt" | sed 's/\\\\n/ /g' | sed "s/—/. /g" | strip-emoji.sh
+    echo "$txt" | sed 's/\\\\n/ /g' | sed "s/—/. /g" | strip-emoji.sh | sed 's/\*//g' | sed "s/\"/”/g" | sed "s/'/‘/g"
 }
 
 function tts() {

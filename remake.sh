@@ -8,7 +8,7 @@ ME=$(basename $MYSELF)
 trap 'catch $? $LINENO' ERR
 catch() {
   if [[ "$1" != "0" ]]; then
-    info "$ME - //${pad_n_topic} - returned $1 at line $2"
+    info "$ME - // returned $1 at line $2"
   fi
 }
 
@@ -20,6 +20,8 @@ projectd="$1"
 require -d projectd
 shift
 
+ttsregen=true
+
 while test $# -gt 0
 do
     case "$1" in
@@ -29,7 +31,7 @@ do
     ;;
     --tts-regen)
       ttsregen=true
-      info "will regenerate tts"
+      info "will regenerate tts if needed"
     ;;
     -*)
       err "bad option '$1'"
@@ -41,7 +43,11 @@ done
 
 function check_voice() {
   pfacef=$projectd/tts_${1}.dat
-  require -f pfacef
+  if [[ ! -f pfacef ]]; then
+    persona_sex=$(cat $projectd/${1}.persona | cut -d'#' -f3)
+    voice $1 "${persona_sex}" elevenlabs.io
+    require -f pfacef
+  fi
 
   tts_provider=$(cat $pfacef | cut -d'|' -f1)
   tts_pvoice=$(cat $pfacef | cut -d'|' -f2)
@@ -113,7 +119,7 @@ function check_audio() {
     # check the number of .ogg files in $projectd
     oggfiles=$(oggcount)
     if [[ "$ttsregen" == true || $oggfiles -eq 0 ]]; then
-        info "no .ogg files found in $projectd. re-generating..."
+        info "ttsregen=$ttsregen - re-generating .ogg in $projectd ..."
         # iterate over each section in debate.md
         while read section
         do
@@ -123,6 +129,12 @@ function check_audio() {
             number=$(echo $title | cut -d' ' -f1)
             name=$(echo $title | cut -d' ' -f3)
 
+            ttsf="$projectd/$number-debate-${name,,}.ogg"
+            if [[ -f "$ttsf" ]]; then
+                info "skipping $section: $ttsf already exists"
+                continue
+            fi
+
             if [[ $(nan.sh $number) == true ]]; then
                 info "skipping $section: '$number' is not a number"
                 continue
@@ -131,17 +143,16 @@ function check_audio() {
             fi
 
             # get all text before next section
-            text=$(cat $projectd/debate.md | sed -n "/$section/,/#/p" | sed '$d' | grep -v "$section")
+            text=$(cat $projectd/debate.md | sed -n "/$section/,/# /p" | sed '$d' | grep -v "$section")
             info "generating tts for $section"
 
-            ttsf="$projectd/$number-debate-${name,,}.ogg"
             speech "$text" "$ttsf"
         done < <(cat $projectd/debate.md | grep -P '^#')
         
         oggfiles=$(oggcount)
         info "audio regeneration complete: $oggfiles .ogg files created"
     else
-        info "found $oggfiles .ogg files in $projectd. skipping tts regen..."
+        info "ttsregen=$ttsregen - found $oggfiles .ogg files in $projectd. skipping tts regen..."
     fi
 }
 
@@ -149,14 +160,14 @@ speech=$projectd/debate.md
 
 pfile=$projectd/positive.persona
 require -f pfile
-persona1=$(cat $pfile | cut -d'(' -f1 | xargs)
-
-check_voice positive
-check_voice negative
+persona1=$(cat $pfile | cut -d'#' -f1 | xargs)
 
 nfile=$projectd/negative.persona
 require -f nfile
-persona2=$(cat $nfile | cut -d'(' -f1 | xargs)
+persona2=$(cat $nfile | cut -d'#' -f1 | xargs)
+
+check_voice positive
+check_voice negative
 
 pscores=$projectd/persona1-scores.md
 if [[ ! -f "$pscores" ]]; then
@@ -192,7 +203,9 @@ if [[ -d "$projectd/tmp" ]]; then
 fi
 
 check_audio
+info "rendering audios in $projectd ..."
 $MYDIR/render-audios.sh $projectd && $MYDIR/group-videos.sh $projectd debate 0
+info "re-rendering complete"
 
 if [[ $suspend == true ]]; then
     info "suspending..."

@@ -48,6 +48,7 @@ FFMPEG=$MYDIR/ffmpeg
 
 # logging
 export verbose=off
+tts_provider=google
 
 function log() {
     level="$1"
@@ -258,4 +259,40 @@ function random_transition() {
 # * replaces quotes with curly quotes
 function sanitize_json() {
     echo "$1" | sed -z 's/\n/\\\\n/g' | sed "s/\"/”/g" | sed "s/'/‘/g"
+}
+
+##
+# generates a voice code to use in TTS requests
+function voice() {
+  name="$1"
+  sex="${2,,}"
+  provider=${3:-$tts_provider}
+
+  ttscache="$projectd/tts_${name}.dat"
+  if [[ -f "$ttscache" ]]; then
+    provider=$(cat $ttscache | cut -d'|' -f1)
+    tts_voice=$(cat $ttscache | cut -d'|' -f2)
+    tts_face=$(cat $ttscache | cut -d'|' -f3)
+
+    voice_key="${provider}|$tts_voice|$tts_face"
+    info "restored $name voice: ${voice_key}"
+  else
+    if [[ -n "$sex" ]]; then
+        sex="${sex/nonbinary/female}"
+        sex="${sex/non-binary/female}"
+        sexf=${sex:0:1} # f/m
+        
+        tts_face=$(find $FACE_LIBRARY -name "${sexf}-*-p01.png" | random.sh)
+        require tts_face "${sexf}-*-p01.png in '$FACE_LIBRARY' ($name/$sex)"
+    fi
+    
+    tts_voice=$($MYDIR/tts/tts.sh --voice-only --provider $provider --voice-preference "${sex}")
+    require tts_voice
+
+    voice_key="${provider}|$tts_voice|$tts_face"
+    echo "${voice_key}" > "$ttscache"
+    info "generated $name voice: ${voice_key}"
+  fi
+
+  echo $voice_key
 }
