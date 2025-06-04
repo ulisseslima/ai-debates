@@ -50,11 +50,28 @@ FFMPEG=$MYDIR/ffmpeg
 export verbose=off
 tts_provider=google
 
+# commom terminal colors
+TCRED='\033[0;31m'
+TCGREEN='\033[0;32m'
+TCYELLOW='\033[0;33m'
+TCBLUE='\033[0;34m'
+TCPURPLE='\033[0;35m'
+TCCYAN='\033[0;36m'
+TCLIGHT_GRAY='\033[0;37m'
+TCDARK_GRAY='\033[1;30m'
+TCLIGHT_RED='\033[1;31m'
+TCMAGENTA='\033[1;35m'
+TCNC='\033[0m' # No Color
+TCBOLD='\033[1m'
+
 function log() {
     level="$1"
     shift
 
-    indicator="$1"
+    TCindicator="$1"
+    shift
+
+    TCcolor="$1"
     shift
 
 	if [[ "$1" == '-n' ]]; then
@@ -63,21 +80,26 @@ function log() {
 	fi
 
     if [[ $level == DEBUG && "$verbose" == on || $level != DEBUG ]]; then
-        echo -e "$indicator $(now.sh -t) - ${FUNCNAME[2]}@${BASH_LINENO[1]}/$level: $@"
+        echo -e "${TCcolor}${TCindicator} $(now.sh -t) - ${FUNCNAME[2]}@${BASH_LINENO[1]}/$level:${TCNC} ${TCBOLD}${TCcolor}$@${TCNC}"
     fi
-    echo -e "$REPO_NAME - $indicator $(now.sh -dt) - ${FUNCNAME[2]}@${BASH_LINENO[1]}/$level: $@" >> $LOGS
+    echo -e "$REPO_NAME - $TCindicator $(now.sh -dt) - ${FUNCNAME[2]}@${BASH_LINENO[1]}/$level: $@" >> $LOGS
 }
 
 function info() {
-    >&2 log INFO '###' "$@"
+    # change log color to $CYAN
+    >&2 log INFO '###' "${TCCYAN}" "$@"
 }
 
 function err() {
-    >&2 log ERROR '!!!' "$@"
+    >&2 log ERROR '!!!' "${TCLIGHT_RED}" "$@"
 }
 
 function debug() {
-    >&2 log DEBUG '>>>' "$@"
+    >&2 log DEBUG '<->' "${TCLIGHT_GRAY}" "$@"
+}
+
+function warn() {
+    >&2 log WARN '???' "${TCMAGENTA}" "$@"
 }
 
 for var in "$@"
