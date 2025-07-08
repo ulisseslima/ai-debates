@@ -35,25 +35,26 @@ function speech() {
   padded_order=$(lpad $order)
   outf="$projectd/$padded_order-debate-${out}.ogg"
 
+  echo "# $padded_order - ${out^^}" | tee -a $script
+  echo -e "${txt}\n" >> "$script"
+  order=$((order+1))
+
   if [[ "$script_only" == true ]]; then
-    info "script only, not generating tts: $outf"
+    warn "script only, not generating tts: $outf"
     return 0
   fi
 
   if [[ ! -f "$outf" ]]; then
     info "generating '$provider' tts [$tts_voice]@$speed: $txt"
     $MYDIR/tts/tts.sh "$txt" --tts-provider "$provider" --voice "$tts_voice" --speed $speed -o "$outf"
-    
-    echo "# $padded_order - ${out^^}" | tee -a $script
-    echo -e "${txt}\n" >> "$script"
   else
     info "already created: $outf"
   fi
-  order=$((order+1))
 }
 
 start=$(elapsed.sh)
 tts_provider=google
+tts_provider_b=elevenlabs.io
 script_only=false
 order=1
 suspend=false
@@ -87,6 +88,14 @@ do
     ;;
     --script-only)
       script_only=true
+    ;;
+    --tts-a)
+      shift
+      tts_provider="$1"
+    ;;
+    --tts-b)
+      shift
+      tts_provider_b="$1"
     ;;
     -*)
       err "bad option '$1'"
@@ -144,11 +153,11 @@ $response
 info "generating voices..."
 # TODO don't repeat voices, pitch shift 1.15
 # TODO google doesn't allow rate with some languages. shift to ffmpeg
-tts_voice_positive=$(voice positive "${persona1_sex^^}" elevenlabs.io)
-tts_voice_negative=$(voice negative "${persona2_sex^^}" elevenlabs.io)
-tts_voice_mediator=$(voice mediator)
-tts_voice_judge=$(voice judge)
-tts_voice_audience=$(voice audience)
+tts_voice_positive=$(voice positive "${persona1_sex^^}" $tts_provider_b)
+tts_voice_negative=$(voice negative "${persona2_sex^^}" $tts_provider_b)
+tts_voice_mediator=$(voice mediator random $tts_provider)
+tts_voice_judge=$(voice judge random $tts_provider)
+tts_voice_audience=$(voice audience random $tts_provider)
 
 echo -e "# DEBATERS POSITIONS
 positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_positive
@@ -266,6 +275,12 @@ $MYDIR/api/ai-chat.sh --context $topic_name --delete true
 
 total_time=$(elapsed.sh $start --minutes)
 info "debate+tts time: $total_time minutes"
+
+if [[ "$script_only" == true ]]; then
+    info "$script - to generate the video, run: "
+    echo aidb-remake $projectd
+    exit 0
+fi
 
 $MYDIR/render-audios.sh "$projectd"
 

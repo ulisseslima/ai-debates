@@ -78,9 +78,9 @@ done
 require tts_provider
 
 if [[ -z "$voice" ]]; then
-    case $tts_provider in
+    case ${tts_provider,,} in
         google)
-            if [[ -z "$voice_preference" ]]; then
+            if [[ -z "$voice_preference" || "$voice_preference" == "random" ]]; then
                 voice=$($MYDIR/google/tts-voice-select.sh --random-american)
             else
                 voice=$($MYDIR/google/tts-voice-select.sh --random ",${voice_preference^^}")
@@ -89,11 +89,19 @@ if [[ -z "$voice" ]]; then
             pitch=$(random-float.sh 0.8 1.10)
             info "random pitch: $pitch"
         ;;
-        OpenAI|openai)
-            voice=$($MYDIR/openai/tts-openai.sh random none)
+        openai)
+            if [[ -z "$voice_preference" || "$voice_preference" == "random" ]]; then
+                voice=$($MYDIR/openai/tts-openai.sh random none)
+            else
+                voice=$($MYDIR/openai/tts-openai.sh random-${voice_preference,,} none)
+            fi
         ;;
         elevenlabs.io|eleven)
-            voice=$($MYDIR/elevenlabs.io/tts-11.sh random-${voice_preference,,} none)
+            if [[ -z "$voice_preference" || "$voice_preference" == "random" ]]; then
+                voice=$($MYDIR/elevenlabs.io/tts-11.sh random none)
+            else
+                voice=$($MYDIR/elevenlabs.io/tts-11.sh random-${voice_preference,,} none)
+            fi
         ;;
         *)
             err "unreognized tts provider: $tts_provider"
@@ -151,8 +159,8 @@ function tts() {
         fi
 
         >&2 echo "└ ${ttsf} - generating $tts_provider tts..."
-        case $tts_provider in
-            OpenAI)
+        case ${tts_provider,,} in
+            openai)
                 ttsf=$($MYDIR/openai/tts-openai.sh $voice "$text" -o "${ttsf}" -x $speed)
             ;;
             elevenlabs.io|eleven)

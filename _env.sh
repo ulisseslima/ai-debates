@@ -299,7 +299,7 @@ function voice() {
     voice_key="${provider}|$tts_voice|$tts_face"
     info "restored $name voice: ${voice_key}"
   else
-    if [[ -n "$sex" ]]; then
+    if [[ -n "$sex" && "$sex" != "random" ]]; then
         sex="${sex/nonbinary/female}"
         sex="${sex/non-binary/female}"
         sexf=${sex:0:1} # f/m
@@ -313,7 +313,7 @@ function voice() {
 
     voice_key="${provider}|$tts_voice|$tts_face"
     echo "${voice_key}" > "$ttscache"
-    info "generated $name voice: ${voice_key}"
+    info "${name^^} generated voice: ${voice_key}"
   fi
 
   echo $voice_key

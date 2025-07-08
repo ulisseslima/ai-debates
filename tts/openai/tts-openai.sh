@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# 
 MYSELF="$(readlink -f "$0")"
 MYDIR="${MYSELF%/*}"
 ME=$(basename $MYSELF)
@@ -7,16 +8,25 @@ source $MYDIR/../../_env.sh
 [[ -f $LOCAL_ENV ]] && source $LOCAL_ENV
 source $(real require.sh)
 
-voices="alloy
-echo
-fable
-onyx
-nova
-shimmer"
+voices="alloy male
+echo male
+fable male
+onyx male
+ash male
+nova female
+shimmer female
+coral female
+sage female"
 
-voice_id=$1
-if [[ "$voice_id" == random ]]; then
-    voice_id="$(echo "$voices" | shuf -n1)"
+voice_id=${1,,}
+if [[ "$voice_id" == random* ]]; then
+    if [[ "$voice_id" == *male ]]; then
+        gender=$(echo "$voice_id" | cut -d'-' -f2)
+        info "filter: $gender"
+        voice_id=$(echo "$voices" | grep -w "$gender" | shuf -n1 | cut -d' ' -f1)
+    else
+        voice_id=$(echo "$voices" | shuf -n1 | cut -d' ' -f1)
+    fi
 fi
 require voice_id 'arg1'
 shift
