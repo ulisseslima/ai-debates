@@ -156,7 +156,7 @@ function check_audio() {
     fi
 }
 
-speech=$projectd/debate.md
+script=$projectd/debate.md
 
 pfile=$projectd/positive.persona
 require -f pfile
@@ -172,14 +172,14 @@ check_voice negative
 pscores=$projectd/persona1-scores.md
 if [[ ! -f "$pscores" ]]; then
   echo "${persona1}’s Scores:" > "$pscores"
-  cat "$speech" | sed "s/'/’/g" | sed "s/ out of /\//" | sed -n "/$persona1’s Scores/,/$persona2’s Scores/p" | sed '$d' | grep -P "^[\d]" >> "$pscores"
+  cat "$script" | sed "s/'/’/g" | sed "s/ out of /\//" | sed -n "/$persona1’s Scores/,/$persona2’s Scores/p" | sed '$d' | grep -P "^[\d]" >> "$pscores"
 fi
 require -f pscores
 
 nscores=$projectd/persona2-scores.md
 if [[ ! -f "$nscores" ]]; then
   echo "${persona2}’s Scores:" > "$nscores"
-  cat "$speech" | sed "s/'/’/g" | sed "s/ out of /\//" | sed -n "/$persona2’s Scores/,\$p" | sed '$d' | grep -P "^[\d]" >> "$nscores"
+  cat "$script" | sed "s/'/’/g" | sed "s/ out of /\//" | sed -n "/$persona2’s Scores/,\$p" | sed '$d' | grep -P "^[\d]" >> "$nscores"
 fi
 require -f nscores
 
@@ -206,6 +206,9 @@ check_audio
 info "rendering audios in $projectd ..."
 $MYDIR/render-audios.sh $projectd && $MYDIR/group-videos.sh $projectd debate 0
 info "re-rendering complete"
+
+echo "" >> $script
+$MYDIR/video-chapters.sh "$projectd" >> $script
 
 if [[ $suspend == true ]]; then
     info "suspending..."
