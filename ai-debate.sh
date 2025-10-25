@@ -53,7 +53,7 @@ function speech() {
 }
 
 start=$(elapsed.sh)
-tts_provider=google
+tts_provider_a=google
 tts_provider_b=elevenlabs.io
 script_only=false
 order=1
@@ -89,10 +89,12 @@ do
     --script-only)
       script_only=true
     ;;
+    # mediator, judge, audience
     --tts-a)
       shift
-      tts_provider="$1"
+      tts_provider_a="$1"
     ;;
+    # debater voices
     --tts-b)
       shift
       tts_provider_b="$1"
@@ -155,9 +157,9 @@ info "generating voices..."
 # TODO google doesn't allow rate with some languages. shift to ffmpeg
 tts_voice_positive=$(voice positive "${persona1_sex^^}" $tts_provider_b)
 tts_voice_negative=$(voice negative "${persona2_sex^^}" $tts_provider_b)
-tts_voice_mediator=$(voice mediator random $tts_provider)
-tts_voice_judge=$(voice judge random $tts_provider)
-tts_voice_audience=$(voice audience random $tts_provider)
+tts_voice_mediator=$(voice mediator random $tts_provider_a)
+tts_voice_judge=$(voice judge random $tts_provider_a)
+tts_voice_audience=$(voice audience random $tts_provider_a)
 
 echo -e "# DEBATERS POSITIONS
 positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_positive

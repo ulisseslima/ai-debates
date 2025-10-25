@@ -66,7 +66,7 @@ done
 
 body="$($ROOT/tts/ai-tts-model.sh gpt "$voice_id" "$text")"
 response=$($ROOT/api/api-open-ai.sh POST "audio/speech" "$body")
-require -f response '-MPEG ADTS, layer III'
+require -f response '-MPEG ADTS, layer III' "$bffody"
 
 response_ogg="${response}-${speaking_rate}x.ogg"
 if [[ ! -f "$response_ogg" ]]; then
