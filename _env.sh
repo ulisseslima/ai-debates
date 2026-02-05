@@ -28,16 +28,8 @@ fi
 CACHE=/tmp/$REPO_NAME/cache
 mkdir -p $CACHE
 
-BLACKLISTS=$CONFD/blacklist
-
 PROJECTS=$ROOT/projects
 mkdir -p $ROOT/bin
-
-LIBRARY=$ROOT/library
-# music for 1-minute videos:
-SHORT_LIBRARY=$ROOT/library
-
-MEDIA_LIBRARY=$ROOT/media-library
 
 LOGS="$CACHE/logs"
 
