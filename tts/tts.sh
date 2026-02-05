@@ -166,27 +166,28 @@ function tts() {
             elevenlabs.io|eleven)
                 voice_gender=$(echo "$voice" | cut -d'#' -f3)
 
-                set +e
-                error=$(rotate_tts11_api_key)
-                set -e
+                rotate_tts11_api_key
+                # set +e
+                # error=$(rotate_tts11_api_key)
+                # set -e
 
-                if [[ -n "$error" ]]; then
-                    tts_provider=google
-                    voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
-                    err "falling back to google tts with $voice ..."
-                    continue
-                fi
+                # if [[ -n "$error" ]]; then
+                #     tts_provider=google
+                #     voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
+                #     err "falling back to google tts with $voice ..."
+                #     continue
+                # fi
 
-                set +e
+                # set +e
                 ttsf=$($MYDIR/elevenlabs.io/tts-11.sh "$voice" "$text" -o "${ttsf}" -x $speed)
-                return_code=$?
-                set -e
+                # return_code=$?
+                # set -e
 
-                if [[ "$return_code" != 0 ]]; then
-                    tts_provider=google
-                    voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
-                    err "falling back to google tts with $voice ..."
-                fi
+                # if [[ "$return_code" != 0 ]]; then
+                #     tts_provider=google
+                #     voice=$($MYDIR/tts.sh --voice-only --provider $tts_provider --voice-preference $voice_gender)
+                #     err "falling back to google tts with $voice ..."
+                # fi
             ;;
             google)
                 ttsf=$($ROOT/api/api-gcloud-tts.sh "$text" -o "$ttsf" -x $speed $voice)
