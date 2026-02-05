@@ -61,7 +61,7 @@ suspend=false
 yes=true
 
 # generate a hot topic
-# topic="should all drugs be legalized?"
+#topic="should all drugs be legalized?"
 topic="$1"
 require topic
 shift
@@ -293,6 +293,8 @@ $MYDIR/group-videos.sh "$projectd" debate 0
 
 echo "" >> $script
 $MYDIR/video-chapters.sh "$projectd" >> $script
+
+ai-thumbnail "$topic" -o "$projectd/thumbnail.jpg"
 
 info "done"
 if [[ $suspend == true ]]; then
