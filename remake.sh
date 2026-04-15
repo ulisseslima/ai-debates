@@ -157,6 +157,7 @@ function check_audio() {
 }
 
 script=$projectd/debate.md
+info "$script - remaking debate video from tts audios in $projectd ..."
 
 pfile=$projectd/positive.persona
 require -f pfile
