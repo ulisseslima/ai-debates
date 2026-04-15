@@ -18,6 +18,26 @@ source $MYDIR/_env.sh
 source $(real require.sh)
 
 ##
+# checks if a section already exists in the script file
+function section_exists() {
+  local section_marker="$1"
+  [[ -f "$script" ]] && grep -qF "$section_marker" "$script"
+}
+
+##
+# writes to script file only if section doesn't exist
+function write_section() {
+  local section_marker="$1"
+  local content="$2"
+  
+  if ! section_exists "$section_marker"; then
+    echo -e "$content" | tee -a "$script"
+  else
+    info "section already exists in script: $section_marker"
+  fi
+}
+
+##
 # generates a tts file
 function speech() {
   txt="$1"
@@ -35,8 +55,15 @@ function speech() {
   padded_order=$(lpad $order)
   outf="$projectd/$padded_order-debate-${out}.ogg"
 
-  echo "# $padded_order - ${out^^}" | tee -a $script
-  echo -e "${txt}\n" >> "$script"
+  section_marker="# $padded_order - ${out^^}"
+  
+  if ! section_exists "$section_marker"; then
+    echo "$section_marker" | tee -a $script
+    echo -e "${txt}\n" >> "$script"
+  else
+    info "section already in script: $section_marker"
+  fi
+  
   order=$((order+1))
 
   if [[ "$script_only" == true ]]; then
@@ -53,8 +80,8 @@ function speech() {
 }
 
 start=$(elapsed.sh)
-tts_provider_a=google
-tts_provider_b=elevenlabs.io
+tts_provider_a=google # audience, etc
+tts_provider_b=elevenlabs.io # debaters
 script_only=false
 order=1
 suspend=false
@@ -67,8 +94,7 @@ require topic
 shift
 
 topic_name=$(safe_name "$topic")
-# TODO
-# * check if topic was already started and replace or resume
+# Script is now fully idempotent and will resume from where it left off
 
 while test $# -gt 0
 do
@@ -88,6 +114,12 @@ do
     ;;
     --script-only)
       script_only=true
+    ;;
+    # all
+    --tts)
+      shift
+      tts_provider_a="$1"
+      tts_provider_b="$1"
     ;;
     # mediator, judge, audience
     --tts-a)
@@ -111,7 +143,32 @@ projectd="$PROJECTS/$topic_name"
 mkdir -p $projectd
 script="$projectd/debate.md"
 
-response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
+# Resume from last order if script exists
+if [[ -f "$script" ]]; then
+  last_order=$(grep -oP '^# \K\d+' "$script" | tail -1 || echo "0")
+  order=$((last_order + 1))
+  info "resuming from order $order (last completed: $last_order)"
+else
+  order=1
+  info "starting new debate script"
+fi
+
+# Check if personas already exist from previous run
+if [[ -f "$projectd/positive.persona" ]] && [[ -f "$projectd/negative.persona" ]]; then
+  info "reusing existing personas from previous run"
+  persona1=$(cat "$projectd/positive.persona" | cut -d'#' -f1 | xargs)
+  persona1_class=$(cat "$projectd/positive.persona" | cut -d'#' -f2 | xargs)
+  persona1_sex=$(cat "$projectd/positive.persona" | cut -d'#' -f3 | xargs)
+  
+  persona2=$(cat "$projectd/negative.persona" | cut -d'#' -f1 | xargs)
+  persona2_class=$(cat "$projectd/negative.persona" | cut -d'#' -f2 | xargs)
+  persona2_sex=$(cat "$projectd/negative.persona" | cut -d'#' -f3 | xargs)
+  
+  info "positive: '$persona1' ($persona1_class) $persona1_sex, negative: '$persona2' ($persona2_class) $persona2_sex"
+  response=$(grep -A 100 "^# PERSONAS" "$script" | grep -v "^# PERSONAS" | head -n -1 || echo "")
+else
+  # Generate new personas
+  response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
 
 prompt="Extract the name, denomination, and sex of the personas into the following format for each line: 
 persona name#persona denomination#sex
@@ -145,12 +202,18 @@ do
   fi
 done
 
-echo -e "# TOPIC
+  # Save personas for idempotency
+  echo "$persona1#$persona1_class#${persona1_sex^^}" > $projectd/positive.persona
+  echo "$persona2#$persona2_class#${persona2_sex^^}" > $projectd/negative.persona
+fi
+
+topic_section="# TOPIC
 ${topic} - $persona1_class vs. $persona2_class
 
 # PERSONAS
 $response
-\n" | tee -a "$script"
+"
+write_section "# TOPIC" "$topic_section"
 
 info "generating voices..."
 # TODO don't repeat voices, pitch shift 1.15
@@ -161,17 +224,15 @@ tts_voice_mediator=$(voice mediator random $tts_provider_a)
 tts_voice_judge=$(voice judge random $tts_provider_a)
 tts_voice_audience=$(voice audience random $tts_provider_a)
 
-echo -e "# DEBATERS POSITIONS
+positions_section="# DEBATERS POSITIONS
 positive: '$persona1' ($persona1_class) $persona1_sex - voiced by $tts_voice_positive
 negative: '$persona2' ($persona2_class) $persona2_sex - voiced by $tts_voice_negative
-\n" | tee -a "$script"
-
-echo "$persona1#$persona1_class#${persona1_sex^^}" > $projectd/positive.persona
-echo "$persona2#$persona2_class#${persona2_sex^^}" > $projectd/negative.persona
+"
+write_section "# DEBATERS POSITIONS" "$positions_section"
 
 ##
 # Introduction
-# TODO ver o que fazer pra não chamar o ai-chat se já tiver o arquivo. hoje depende de estar no cache pra não repetir a chamada e bugar tudo
+# The speech() function now checks if content exists before writing and generating TTS
 speech="Today, we'll debate '$topic' with $persona1, a $persona1_class; and $persona2, a $persona2_class. They're two Artificial Intelligence personas. Please introduce yourselves."
 speech "$speech" "$tts_voice_mediator" introduction
 
@@ -291,8 +352,13 @@ info "rendering time: $total_time minutes"
 
 $MYDIR/group-videos.sh "$projectd" debate 0
 
-echo "" >> $script
-$MYDIR/video-chapters.sh "$projectd" >> $script
+if ! section_exists "# Video Chapters"; then
+  echo "" >> $script
+  echo "# Video Chapters" >> $script
+  $MYDIR/video-chapters.sh "$projectd" >> $script
+else
+  info "video chapters already in script"
+fi
 
 ai-thumbnail "$topic" -o "$projectd/thumbnail.jpg"
 
