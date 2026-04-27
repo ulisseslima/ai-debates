@@ -26,11 +26,20 @@ do
     case "$1" in
         --context)
             shift
-            
+
             cache="$CACHE/context_${1}"
             if [[ -f "$cache" ]]; then
+                debug "loading context from $cache - bytes: $(stat -c%s "$cache")"
                 context=$(cat "$cache")
-                json=$(echo "$json" | jq ".messages += [${context}]")
+                if [[ -n "${context//[[:space:]]/}" ]]; then
+                    if ! new_json=$(echo "$json" | jq ".messages += [${context}]" 2>&1); then
+                        err "failed to append context from $cache: $new_json"
+                    else
+                        json="$new_json"
+                    fi
+                else
+                    debug "context file $cache is empty; skipping append"
+                fi
             fi
         ;;
         --system)
