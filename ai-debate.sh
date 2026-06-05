@@ -139,8 +139,33 @@ do
     shift
 done
 
-projectd="$PROJECTS/$topic_name"
-mkdir -p $projectd
+# if topic_name is file, resume from there
+if [[ -d "$topic" ]]; then
+  projectd=$(readlink -f "$topic")
+
+  topic_name=$(basename "$projectd")
+
+  # reconstruct $topic from script if possible
+  if [[ -f "$projectd/debate.md" ]]; then
+    topic=$(grep -m1 -a1 '# TOPIC' "$projectd/debate.md" | grep -v '# TOPIC' | cut -d'-' -f1 | xargs)
+    require topic
+  fi
+  
+  info "resuming '$topic' from existing project directory: $projectd"
+elif [[ -f "$topic" ]]; then
+  script=$(readlink -f "$topic")
+  projectd=$(dirname "$script")
+
+  topic_name=$(basename "$projectd")
+  topic=$(grep -m1 -a1 '# TOPIC' "$script" | grep -v '# TOPIC' | cut -d'-' -f1 | xargs)
+  require topic
+
+  info "resuming '$topic' from existing script file: $script"
+else
+  projectd="$PROJECTS/$topic_name"
+  mkdir -p $projectd
+fi
+
 script="$projectd/debate.md"
 
 # Resume from last order if script exists
