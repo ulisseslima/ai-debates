@@ -1,7 +1,9 @@
 #!/bin/bash -e
 # @installable
 # generates a debate on a topic
-# let's you choose what type of person will debate, or randomize
+# let's you choose what type of person will debate, or randomize.
+#
+# to resume a debate, pass the project directory as the first argument.
 MYSELF="$(readlink -f "$0")"
 MYDIR="${MYSELF%/*}"
 ME=$(basename $MYSELF)
