@@ -8,4 +8,4 @@ source $(real require.sh)
 topic="$1"
 require topic "Please provide a topic for debate suggestions."
 
-ai-chat "suggest a few hot topics (on the comic/absurd side) for debates on '$topic' in the format of 'AI debates: Is X better than Y? Protagonist vs Antagnonist' where X and Y are two opposing views on the topic and protagonist and antagonist are the respective debaters' personas, like 'libertarian vs socialist'. Make sure the topics are engaging and relevant to current events. Keep the theme short and catchy."
+ai-chat "suggest a few hot topics (on the comic/absurd side) for debates on '$topic' in the format of 'X vs Y' where X and Y are two opposing views on the topic, so generate the title in a way that makes it clear it's one side vs the other. Make sure the topics are engaging and relevant to current events. Keep the theme short and catchy."
