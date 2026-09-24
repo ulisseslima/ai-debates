@@ -195,7 +195,7 @@ if [[ -f "$projectd/positive.persona" ]] && [[ -f "$projectd/negative.persona" ]
   response=$(grep -A 100 "^# PERSONAS" "$script" | grep -v "^# PERSONAS" | head -n -1 || echo "")
 else
   # Generate new personas
-  response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' for a debate with the theme '$topic'")
+  response=$($MYDIR/api/ai-chat.sh --prompt "generate two interesting, opposite personas like 'Alfred, a libertarian' or 'Guadalupe, social democrat' - but more on the comic/absurd side - for a debate with the theme '$topic'. Make sure the personas are engaging and relevant to current events.")
 
 prompt="Extract the name, denomination, and sex of the personas into the following format for each line: 
 persona name#persona denomination#sex
