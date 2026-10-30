@@ -64,6 +64,10 @@ do
         shift
         voice_preference="$1"
     ;;
+    --volume)
+        shift
+        volume="$1"
+    ;;
     --debug)
         debug=true
     ;;
@@ -102,6 +106,9 @@ if [[ -z "$voice" ]]; then
             else
                 voice=$($MYDIR/elevenlabs.io/tts-11.sh random-${voice_preference,,} none)
             fi
+        ;;
+        fish|fish.audio)
+            voice=$($MYDIR/fish/tts-fish.sh random none ${voice_preference:+--gender "$voice_preference"})
         ;;
         *)
             err "unreognized tts provider: $tts_provider"
@@ -196,6 +203,9 @@ function tts() {
                     err "manual check required on: $last_response"
                     break
                 fi
+            ;;
+            fish|fish.audio)
+                ttsf=$($MYDIR/fish/tts-fish.sh "$voice" "$text" -o "${ttsf}" -x $speed ${volume:+--volume "$volume"})
             ;;
             *)
                 err "unrecognized tts_provider: $tts_provider"
